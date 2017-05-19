@@ -95,6 +95,8 @@ object Seq2Parquet extends StrictLogging {
           .getOrCreate()
 
         run(config, spark)
+
+        spark.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

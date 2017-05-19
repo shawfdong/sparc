@@ -7,10 +7,8 @@ import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.tools.KmerCounting.make_reads_rdd
 import org.jgi.spark.localcluster.{DNASeq, Kmer, Utils}
 import sext._
 
@@ -133,21 +131,20 @@ object KmerMapReads extends LazyLogging {
       }
 
       else if (format.equals("base64")) {
+
         textRDD.map {
           line =>
             val a = line.split(",")
-            val id = a(0).toLong
-
-            val lst = a(1).split(" ")
-            if (lst.length % 2 != 0) throw new RuntimeException("data format is incorrect")
-            val seq = (0 until (lst.length / 2)).map {
-              i =>
-                val len = lst(i * 2).toInt
-                val s = DNASeq.from_base64(lst(i * 2 + 1)).to_bases(len)
-                s
+            val id = a(0).toInt
+            val seq = a.drop(1).map {
+              t =>
+                val lst = t.split(" ")
+                val len = lst(0).toInt
+                DNASeq.from_base64(lst(1)).to_bases(len)
             }.mkString("N")
             (id, seq)
         }
+
       }
       else
         throw new IllegalArgumentException
@@ -163,7 +160,7 @@ object KmerMapReads extends LazyLogging {
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_iteration, sc)
+    val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
     val kmers =
@@ -219,6 +216,7 @@ object KmerMapReads extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        sc.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

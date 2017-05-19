@@ -135,6 +135,7 @@ object GraphGen extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        sc.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

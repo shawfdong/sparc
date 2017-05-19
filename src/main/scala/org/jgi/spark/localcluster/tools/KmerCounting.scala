@@ -17,7 +17,7 @@ import sext._
 object KmerCounting extends LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
-                    contamination: Double = 0.00005, k: Int = 31, format: String = "seq",
+                    contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -44,6 +44,11 @@ object KmerCounting extends LazyLogging {
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions for the input, only applicable to local files")
+
+      opt[Int]("wait").action((x, c) =>
+        c.copy(sleep = x))
+        .text("wait $sleep second before stop spark session. For debug purpose, default 0.")
+
 
       opt[Int]('k', "kmer_length").action((x, c) =>
         c.copy(k = x)).
@@ -81,14 +86,15 @@ object KmerCounting extends LazyLogging {
     val smallKmersRDD = readsRDD.map(x => Kmer.generate_kmer(seq = x, k = config.k)).flatMap(x => x)
       .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i)
       .map((_, 1)).reduceByKey(_ + _)
+      .sortBy(-_._2)
 
     val kmer_count = smallKmersRDD.count
 
     val topN = (kmer_count * config.contamination * math.min(1.5, config.n_iteration)).toInt
     logger.info(s"Iteration $i , number of kmers: $kmer_count, take top $topN")
 
-    val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
-
+    //val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
+    val topKmers = smallKmersRDD.take(topN)
     val filename = "%s/kmercounting_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
 
     Utils.serialize_object(filename, topKmers)
@@ -97,7 +103,7 @@ object KmerCounting extends LazyLogging {
 
   }
 
-  def make_reads_rdd(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[String] = {
+  def make_reads_rdd_bk(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[String] = {
     if (format.equals("parquet")) throw new NotImplementedError
     else {
       val textRDD = if (n_partition > 0)
@@ -115,15 +121,14 @@ object KmerCounting extends LazyLogging {
 
         textRDD.map {
           line =>
-            val lst = line.split(",").tail.head.split(" ")
-            if (lst.length % 2 != 0) throw new RuntimeException("data format is incorrect")
-            (0 until (lst.length / 2)).map {
-              i =>
-                val len = lst(i * 2).toInt
-                val s = DNASeq.from_base64(lst(i * 2 + 1)).to_bases(len)
-                s
-            }
-        }.map(_.mkString("N"))
+            line.split(",").drop(1).map {
+              t =>
+                val lst = t.split(" ")
+                val len = lst(0).toInt
+                DNASeq.from_base64(lst(1)).to_bases(len)
+            }.mkString("N")
+        }
+
       }
       else
         throw new IllegalArgumentException
@@ -143,7 +148,8 @@ object KmerCounting extends LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = make_reads_rdd(seqFiles, config.format, config.n_iteration, sc)
+    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_iteration, sc).map(_._2)
+    //val smallReadsRDD = make_reads_rdd_bk(seqFiles, config.format, config.n_partition, sc)
     smallReadsRDD.cache()
     val (filenames, tmp) = 0.until(config.n_iteration).map {
       i =>
@@ -191,6 +197,8 @@ object KmerCounting extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
+        sc.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

@@ -65,7 +65,7 @@ object Seq2Base64 extends LazyLogging {
         sc.textFile(seqFiles)
 
     def f(seq: String) = {
-      seq.split('N').map {
+      seq.split('N').map(_.trim()).filter(_.nonEmpty).map {
         s => {
           val o = DNASeq.from_bases(s)
           Array(s.length.toString, o.to_base64).mkString(" ")
@@ -102,6 +102,8 @@ object Seq2Base64 extends LazyLogging {
           .getOrCreate()
 
         run(config, spark)
+
+        spark.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

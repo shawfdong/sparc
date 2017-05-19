@@ -4,7 +4,9 @@ lazy val root = (project in file(".")).
     name := "LocalCluster",
     version := "0.1",
     scalaVersion := "2.11.8",
-    test in assembly := {}
+    test in assembly := {},
+
+    testOptions in Test := Seq(Tests.Filter(s => !s.contains("Jedis")))
 
     //mainClass in Compile := Some("myPackage.MyMainObject")
   ).settings(
@@ -17,6 +19,7 @@ lazy val root = (project in file(".")).
 javaOptions ++= Seq("-Xms2G", "-Xmx8G", "-XX:+CMSClassUnloadingEnabled")
 
 spDependencies +=  "RedisLabs/spark-redis:0.3.2"
+spIgnoreProvided := true
 
 
 libraryDependencies ++= Seq(
