@@ -18,9 +18,7 @@ lazy val root = (project in file(".")).
 
 javaOptions ++= Seq("-Xms2G", "-Xmx8G", "-XX:+CMSClassUnloadingEnabled")
 
-spDependencies +=  "RedisLabs/spark-redis:0.3.2"
-spIgnoreProvided := true
-
+sparkVersion := "2.0.1"
 
 libraryDependencies ++= Seq(
   "com.github.scopt" % "scopt_2.11" % "3.5.0",
@@ -49,6 +47,8 @@ libraryDependencies ++= Seq(
 
 )
 
+spDependencies +=  "RedisLabs/spark-redis:0.3.2"
+spIgnoreProvided := true
 
 assemblyMergeStrategy in assembly := {
   case PathList("javax", "servlet", xs@_*) => MergeStrategy.first
