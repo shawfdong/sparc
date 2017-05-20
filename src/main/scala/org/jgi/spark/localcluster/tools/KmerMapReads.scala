@@ -199,7 +199,7 @@ object KmerMapReads extends LazyLogging {
     }
 
     val totalTime1 = System.currentTimeMillis
-    logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+    logger.info("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
   }
 
 

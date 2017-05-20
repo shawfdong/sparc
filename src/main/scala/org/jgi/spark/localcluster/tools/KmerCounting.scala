@@ -4,6 +4,7 @@
 package org.jgi.spark.localcluster.tools
 
 import java.io.{FileOutputStream, ObjectOutputStream}
+import java.lang.reflect.{Field, Modifier}
 import java.nio.file.{Files, Paths}
 import java.util.UUID
 
@@ -17,7 +18,7 @@ import sext._
 object KmerCounting extends LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
-                    contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
+                    _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0, sample_fraction: Double = -1.0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -66,7 +67,7 @@ object KmerCounting extends LazyLogging {
 
 
       opt[Double]('c', "contamination").action((x, c) =>
-        c.copy(contamination = x)).
+        c.copy(_contamination = x)).
         validate(x =>
           if (x > 0 && x <= 1) success
           else failure("contamination should be positive and less than 1"))
@@ -96,7 +97,7 @@ object KmerCounting extends LazyLogging {
 
     val kmer_count = smallKmersRDD.count
 
-    val topN = (kmer_count * config.contamination * math.min(1.5, config.n_iteration)).toInt
+    val topN = (kmer_count * contamination(config) * math.min(1.5, config.n_iteration)).toInt
     logger.info(s"Iteration $i , number of kmers: $kmer_count, take top $topN")
 
     val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
@@ -142,8 +143,19 @@ object KmerCounting extends LazyLogging {
 
   }
 
-  def run(config: Config, sc: SparkContext): Unit = {
+  def contamination(config: Config): Double = {
+    if (config.sample_fraction > 0) {
+      val oldval = config._contamination
+      oldval / config.sample_fraction
+    } else {
+      config._contamination
+    }
+  }
 
+  def run(config: Config, sc: SparkContext): Unit = {
+    if (config.sample_fraction > 0) {
+      logger.info(s"Since random sample is applied, adjust contamination from ${config._contamination} to ${contamination(config)}")
+    }
 
     // read seq file, Hash readID to integer
     // read all sample files
@@ -164,7 +176,7 @@ object KmerCounting extends LazyLogging {
     smallReadsRDD.unpersist()
 
     val kmer_count = tmp.foldLeft(0l)(_ + _)
-    val topN = (kmer_count * config.contamination).toInt
+    val topN = (kmer_count * contamination(config)).toInt
     logger.info(s"total number of kmers: $kmer_count, take top $topN")
 
 
