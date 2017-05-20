@@ -42,7 +42,7 @@ object KmerCounting extends LazyLogging {
 
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
-        .text("paritions for the input, only applicable to local files")
+        .text("paritions for the input")
 
       opt[Int]("sleep").action((x, c) =>
         c.copy(sleep = x))
@@ -216,10 +216,6 @@ object KmerCounting extends LazyLogging {
     options match {
       case Some(_) =>
         val config = options.get
-        if (config.input.startsWith("hdfs:") && config.n_partition > 0) {
-          logger.error("do not set partition when use hdfs input. Change block size of hdfs instead")
-          sys.exit(-1)
-        }
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Counting")

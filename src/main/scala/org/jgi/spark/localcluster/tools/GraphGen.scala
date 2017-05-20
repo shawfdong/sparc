@@ -56,6 +56,10 @@ object GraphGen extends LazyLogging {
         .text("minimum number of kmers that two reads share")
 
 
+      opt[Int]('n', "n_partition").action((x, c) =>
+        c.copy(n_partition = x))
+        .text("paritions for the input")
+
       opt[Int]('n', "n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
@@ -105,7 +109,11 @@ object GraphGen extends LazyLogging {
 
 
     val kmer_reads =
-      sc.textFile(config.kmer_reads).
+      ( if (config.n_partition>0)
+          sc.textFile(config.kmer_reads,minPartitions = config.n_partition)
+        else
+          sc.textFile(config.kmer_reads)
+        ).
         map { line =>
           line.split(" ").apply(1).split(",").map(_.toLong)
         }
