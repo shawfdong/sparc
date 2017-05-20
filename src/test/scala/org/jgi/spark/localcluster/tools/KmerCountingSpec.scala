@@ -25,7 +25,7 @@ class KmerCountingSpec extends FlatSpec with Matchers with BeforeAndAfter with S
     cfg.input should be("test")
   }
   "kmer counting" should "work on the test seq files" in {
-    val cfg = KmerCounting.parse_command_line("-i test/small -p sample.seq -o tmp/kmercounting_seq_test.txt --n_iteration 3".split(" ")).get
+    val cfg = KmerCounting.parse_command_line("-i test/small -p sample.seq -o tmp/kmercounting_seq_test.txt --n_iteration 1 --sample_fraction 0.2".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
     KmerCounting.run(cfg, sc)
   }

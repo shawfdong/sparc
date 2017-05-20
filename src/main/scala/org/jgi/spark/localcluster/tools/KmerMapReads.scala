@@ -18,7 +18,8 @@ import scala.util.Random
 object KmerMapReads extends LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
-                    n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, max_kmer_count: Int = 200, format: String = "seq",
+                    n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
+                    max_kmer_count: Int = 200, format: String = "seq",
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -43,6 +44,11 @@ object KmerMapReads extends LazyLogging {
           if (List("seq", "parquet", "base64").contains(x)) success
           else failure("only valid for seq, parquet or base64")
         ).text("input format (seq, parquet or base64)")
+
+
+      opt[Int]("wait").action((x, c) =>
+        c.copy(sleep = x))
+        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
 
       opt[Int]('n', "n_partition").action((x, c) =>
@@ -116,13 +122,17 @@ object KmerMapReads extends LazyLogging {
   }
 
   def make_reads_rdd(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[(Long, String)] = {
+    make_reads_rdd(file, format, n_partition, -1, sc)
+  }
+
+  def make_reads_rdd(file: String, format: String, n_partition: Int, sample_fraction: Double, sc: SparkContext): RDD[(Long, String)] = {
     if (format.equals("parquet")) throw new NotImplementedError
     else {
-      val textRDD = if (n_partition > 0)
+      var textRDD = if (n_partition > 0)
         sc.textFile(file, minPartitions = n_partition)
       else
         sc.textFile(file)
-
+      if (sample_fraction > 0) textRDD = textRDD.sample(false, sample_fraction, Random.nextLong())
       if (format.equals("seq")) {
 
         textRDD.map {
@@ -216,6 +226,7 @@ object KmerMapReads extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
         sc.stop()
       case None =>
         println("bad arguments")

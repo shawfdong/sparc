@@ -18,7 +18,7 @@ import sext._
 object GraphCC extends LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "",
-                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10,
+                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10,sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -30,6 +30,11 @@ object GraphCC extends LazyLogging {
 
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
+
+
+      opt[Int]("wait").action((x, c) =>
+        c.copy(sleep = x))
+        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
 
       opt[Int]('n', "n_iteration").action((x, c) =>
@@ -168,6 +173,7 @@ object GraphCC extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
         sc.stop()
       case None =>
         println("bad arguments")

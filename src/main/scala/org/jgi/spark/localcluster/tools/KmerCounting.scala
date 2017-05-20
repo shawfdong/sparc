@@ -18,7 +18,7 @@ object KmerCounting extends LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                    scratch_dir: String = "/tmp", n_partition: Int = 0, sample_fraction: Double = -1.0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("KmerCounting") {
@@ -45,9 +45,9 @@ object KmerCounting extends LazyLogging {
         c.copy(n_partition = x))
         .text("paritions for the input, only applicable to local files")
 
-      opt[Int]("wait").action((x, c) =>
+      opt[Int]("sleep").action((x, c) =>
         c.copy(sleep = x))
-        .text("wait $sleep second before stop spark session. For debug purpose, default 0.")
+        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
 
       opt[Int]('k', "kmer_length").action((x, c) =>
@@ -72,6 +72,13 @@ object KmerCounting extends LazyLogging {
           else failure("contamination should be positive and less than 1"))
         .text("the fraction of top k-mers to keep, others are removed likely due to contamination")
 
+      opt[Double]("sample_fraction").action((x, c) =>
+        c.copy(sample_fraction = x)).
+        validate(x =>
+          if (x < 1) success
+          else failure("should be less than 1"))
+        .text("the fraction of reads to sample. if it is less than or equal to 0, no sample")
+
       opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
         c.copy(scratch_dir = x)).text("where the intermediate results are")
 
@@ -86,15 +93,14 @@ object KmerCounting extends LazyLogging {
     val smallKmersRDD = readsRDD.map(x => Kmer.generate_kmer(seq = x, k = config.k)).flatMap(x => x)
       .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i)
       .map((_, 1)).reduceByKey(_ + _)
-      .sortBy(-_._2)
 
     val kmer_count = smallKmersRDD.count
 
     val topN = (kmer_count * config.contamination * math.min(1.5, config.n_iteration)).toInt
     logger.info(s"Iteration $i , number of kmers: $kmer_count, take top $topN")
 
-    //val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
-    val topKmers = smallKmersRDD.take(topN)
+    val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
+
     val filename = "%s/kmercounting_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
 
     Utils.serialize_object(filename, topKmers)
@@ -148,7 +154,7 @@ object KmerCounting extends LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_iteration, sc).map(_._2)
+    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_iteration, config.sample_fraction, sc).map(_._2)
     //val smallReadsRDD = make_reads_rdd_bk(seqFiles, config.format, config.n_partition, sc)
     smallReadsRDD.cache()
     val (filenames, tmp) = 0.until(config.n_iteration).map {

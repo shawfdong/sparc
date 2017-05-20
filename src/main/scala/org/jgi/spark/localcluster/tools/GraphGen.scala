@@ -18,7 +18,7 @@ import scala.util.Random
 object GraphGen extends LazyLogging {
 
   case class Config(kmer_reads: String = "", output: String = "",
-                    n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2,
+                    n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -37,6 +37,11 @@ object GraphGen extends LazyLogging {
           if (x >= 11) success
           else failure("k is too small, should not be smaller than 11"))
         .text("length of k-mer")
+
+      opt[Int]("wait").action((x, c) =>
+        c.copy(sleep = x))
+        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+
 
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
@@ -135,6 +140,7 @@ object GraphGen extends LazyLogging {
 
         val sc = new SparkContext(conf)
         run(config, sc)
+        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
         sc.stop()
       case None =>
         println("bad arguments")
