@@ -8,6 +8,7 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.{DNASeq, Kmer, Utils}
 import sext._
@@ -17,7 +18,7 @@ import scala.util.Random
 
 object GraphGen extends LazyLogging {
 
-  case class Config(kmer_reads: String = "", output: String = "",
+  case class Config(kmer_reads: String = "", output: String = "", use_hdfs: Boolean = false,
                     n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
@@ -41,6 +42,10 @@ object GraphGen extends LazyLogging {
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+
+      opt[Unit]("use_hdfs").action((x, c) =>
+        c.copy(use_hdfs = true))
+        .text("Output to hdfs. Intermediate data is also use hdfs. Default false")
 
 
       opt[Int]("min_shared_kmers").action((x, c) =>
@@ -69,7 +74,7 @@ object GraphGen extends LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, kmer_reads: RDD[Array[Long]], config: Config) = {
+  private def process_iteration(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext) = {
     val edges = kmer_reads.map(_.combinations(2).map(x => x.sorted).filter {
       case a =>
         Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
@@ -77,12 +82,19 @@ object GraphGen extends LazyLogging {
     val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
       .map(x => Array(x._1._1, x._1._2, x._2)).toList
 
-    val filename = "%s/GraphGen_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
 
-    Utils.serialize_object(filename, groupedEdges)
-    logger.info(s"Iteration $i ,#records=${groupedEdges.length} save results to $filename")
+    if (!config.use_hdfs) { //to local scratch file
+      val filename = "%s/GraphGen_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
+      Utils.serialize_object(filename, groupedEdges)
+      logger.info(s"Iteration $i ,#records=${groupedEdges.length} save results to $filename")
+      filename
+    } else { //rdd cache
+      val rdd = sc.parallelize(groupedEdges)
+      rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
+      rdd
+    }
 
-    filename
+
   }
 
 
@@ -103,23 +115,34 @@ object GraphGen extends LazyLogging {
     kmer_reads.take(5).map(_.mkString(",")).foreach(println)
 
 
-    val filenames = 0.until(config.n_iteration).map {
+    val values = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, kmer_reads, config)
+        process_iteration(i, kmer_reads, config, sc)
     }
 
     kmer_reads.unpersist()
 
-    val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[List[Array[Long]]])
+    if (!config.use_hdfs) {
+      val filenames = values.map(_.asInstanceOf[String])
+      val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[List[Array[Long]]])
+      Utils.write_textfile(config.output, result.map(_.mkString(",")).sorted)
+      logger.info(s"total #records=${result.length} save results to ${config.output}")
+      //clean up
+      filenames.foreach {
+        fname =>
+          Files.deleteIfExists(Paths.get(fname))
+      }
+    } else { //hdfs
+      val rdds = values.map(_.asInstanceOf[RDD[Array[Long]]])
+      KmerCounting.delete_hdfs_file(config.output)
+      val rdd = sc.union(rdds).map(_.mkString(","))
+      rdd.saveAsTextFile(config.output)
+      logger.info(s"total #records=${rdd.count} save results to hdfs ${config.output}")
 
-    Utils.write_textfile(config.output, result.map(_.mkString(",")).sorted)
-    logger.info(s"total #records=${result.length} save results to ${config.output}")
-
-    //clean up
-    filenames.foreach {
-      fname =>
-        Files.deleteIfExists(Paths.get(fname))
+      //cleanup
+      rdds.foreach(_.unpersist())
     }
+
 
     val totalTime1 = System.currentTimeMillis
     logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))

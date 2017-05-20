@@ -3,8 +3,6 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.io.{FileOutputStream, ObjectOutputStream}
-import java.lang.reflect.{Field, Modifier}
 import java.nio.file.{Files, Paths}
 import java.util.UUID
 
@@ -88,6 +86,20 @@ object KmerCounting extends LazyLogging {
 
     }
     parser.parse(args, Config())
+  }
+
+  def delete_hdfs_file(filepath: String): Unit = {
+    import org.apache.hadoop.conf.Configuration
+    import org.apache.hadoop.fs.{FileSystem, Path}
+    val conf = new Configuration();
+
+    val output = new Path(filepath);
+    val hdfs = FileSystem.get(conf);
+
+    // delete existing directory
+    if (hdfs.exists(output)) {
+      hdfs.delete(output, true);
+    }
   }
 
   private def generate_for_iteration(i: Int, readsRDD: RDD[String], config: Config) = {
