@@ -113,7 +113,7 @@ object GraphGen extends LazyLogging {
     val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[List[Array[Long]]])
 
     Utils.write_textfile(config.output, result.map(_.mkString(",")).sorted)
-    logger.info(s"total #records=${result.length} save results to $config.output")
+    logger.info(s"total #records=${result.length} save results to ${config.output}")
 
     //clean up
     filenames.foreach {

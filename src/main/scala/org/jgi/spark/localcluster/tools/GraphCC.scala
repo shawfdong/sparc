@@ -147,7 +147,7 @@ object GraphCC extends LazyLogging {
     edges.unpersist()
 
     Utils.write_textfile(config.output, result.sorted)
-    logger.info(s"total #records=${result.length} save results to $config.output")
+    logger.info(s"total #records=${result.length} save results to ${config.output}")
 
     //clean up
     clusters_list.foreach {
@@ -168,7 +168,7 @@ object GraphCC extends LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
-        val conf = new SparkConf().setAppName("Spark Kmer Counting")
+        val conf = new SparkConf().setAppName("Spark Graph CC")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 
         val sc = new SparkContext(conf)
