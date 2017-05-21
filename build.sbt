@@ -20,6 +20,8 @@ javaOptions ++= Seq("-Xms2G", "-Xmx8G", "-XX:+CMSClassUnloadingEnabled")
 
 sparkVersion := "2.0.1"
 
+resolvers += "jcenter.bintray.com" at "http://jcenter.bintray.com/"
+
 libraryDependencies ++= Seq(
   "com.github.scopt" % "scopt_2.11" % "3.5.0",
   "com.github.nikita-volkov" % "sext" % "0.2.6",
@@ -43,7 +45,8 @@ libraryDependencies ++= Seq(
 
   "org.scalatest" % "scalatest_2.11" % "2.2.2" % "provided",
   "com.holdenkarau" % "spark-testing-base_2.11" % "2.0.1_0.6.0" % "provided",
-  "com.lordofthejars" % "nosqlunit-redis" % "0.14.0"  % "provided"
+  "com.lordofthejars" % "nosqlunit-redis" % "0.14.0"  % "provided",
+  "eu.monniot.redis" % "embedded-redis" % "1.2.2" % "provided"
 
 )
 
