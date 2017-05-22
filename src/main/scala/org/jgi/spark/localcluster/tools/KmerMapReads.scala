@@ -76,7 +76,7 @@ object KmerMapReads extends LazyLogging {
           else failure("max_kmer_count should be greater than 2"))
         .text("maximum number of reads that shares a kmer. greater than max_kmer_count, however don't be too big")
 
-      opt[Int]('n', "n_iteration").action((x, c) =>
+      opt[Int](  "n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success

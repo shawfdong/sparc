@@ -72,7 +72,7 @@ object KmerCounting extends LazyLogging {
           else failure("k is too small, should not be smaller than 11"))
         .text("length of k-mer")
 
-      opt[Int]('n', "n_iteration").action((x, c) =>
+      opt[Int]( "n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
@@ -204,8 +204,8 @@ object KmerCounting extends LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_iteration, config.sample_fraction, sc).map(_._2)
-    //val smallReadsRDD = make_reads_rdd_bk(seqFiles, config.format, config.n_partition, sc)
+    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, config.sample_fraction, sc).map(_._2)
+
     smallReadsRDD.cache()
     val (filenames, tmp) = 0.until(config.n_iteration).map {
       i =>

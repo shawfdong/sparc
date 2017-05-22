@@ -60,7 +60,7 @@ object GraphGen extends LazyLogging {
         c.copy(n_partition = x))
         .text("paritions for the input")
 
-      opt[Int]('n', "n_iteration").action((x, c) =>
+      opt[Int]( "n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success

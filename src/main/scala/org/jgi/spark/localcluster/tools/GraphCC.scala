@@ -37,7 +37,7 @@ object GraphCC extends LazyLogging {
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
 
-      opt[Int]('n', "n_iteration").action((x, c) =>
+      opt[Int]( "n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
