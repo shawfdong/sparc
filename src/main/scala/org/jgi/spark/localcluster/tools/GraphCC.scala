@@ -3,9 +3,6 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.nio.file.{Files, Paths}
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD

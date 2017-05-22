@@ -1,11 +1,9 @@
 package org.jgi.spark.localcluster.tools
 
-import com.typesafe.scalalogging.{LazyLogging, StrictLogging}
-import org.apache.log4j.BasicConfigurator
+import com.typesafe.scalalogging.{StrictLogging}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.Utils
 import sext._
 

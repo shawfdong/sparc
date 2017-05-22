@@ -3,16 +3,11 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.nio.file.{Files, Paths}
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.tools.GraphGen.logger
 import org.jgi.spark.localcluster.{DNASeq, JedisManager, Kmer, Utils}
-import org.spark_project.guava.net.InetAddresses
 import sext._
 
 

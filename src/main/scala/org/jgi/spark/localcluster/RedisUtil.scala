@@ -1,6 +1,6 @@
 package org.jgi.spark.localcluster
 
-import redis.clients.jedis.{HostAndPort, JedisCluster}
+import redis.clients.jedis.{JedisCluster}
 import collection.JavaConversions._
 
 /**

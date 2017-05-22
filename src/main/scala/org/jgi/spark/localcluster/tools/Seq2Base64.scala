@@ -1,11 +1,8 @@
 package org.jgi.spark.localcluster.tools
 
-import java.util.Base64
-
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{SparkSession}
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 

@@ -3,7 +3,6 @@ package org.jgi.spark.localcluster
 import java.util
 
 import com.typesafe.scalalogging.LazyLogging
-import redis.clients.jedis
 import redis.clients.jedis._
 
 import collection.JavaConverters._

@@ -3,18 +3,12 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.nio.file.{Files, Paths}
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.{DNASeq, Kmer, Utils}
+import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
-
-import scala.util.Random
-
 
 object GraphGen extends LazyLogging {
 
