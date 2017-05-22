@@ -12,9 +12,7 @@ import collection.JavaConversions._
 
 
 class UtilsSpec extends FlatSpec with Matchers {
-  "IP address" should "be found" in {
-    print(s"IP address of this machine is ${JavaUtils.getLocalHostLANAddress.toString}")
-  }
+
 
   "All ip addresses" should "be found" in {
     JavaUtils.getAllIPs.foreach(println)

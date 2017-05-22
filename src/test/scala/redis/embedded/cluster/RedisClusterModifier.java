@@ -16,7 +16,7 @@ import java.util.List;
  * Created by Lizhen Shi on 5/21/17.
  */
 public class RedisClusterModifier {
-    RedisCluster cluster = null;
+    private RedisCluster cluster = null;
 
     public RedisClusterModifier(RedisCluster cluster) {
         this.cluster = cluster;
@@ -76,7 +76,7 @@ public class RedisClusterModifier {
     }
 
     private List<ClusterState> clusterState() {
-        ArrayList<ClusterState> lst = new ArrayList<ClusterState>();
+        ArrayList<ClusterState> lst = new ArrayList<>();
         for (Redis redis : servers()) {
             try (Client client = new Client("127.0.0.1", redis.ports().get(0))) {
                 String ack = client.clusterInfo();
@@ -143,11 +143,12 @@ public class RedisClusterModifier {
                 return name.matches(patterns);
             }
         });
-        for (final File file : files) {
-            if (!file.delete()) {
-                System.err.println("Can't remove " + file.getAbsolutePath());
+        if (files != null)
+            for (final File file : files) {
+                if (!file.delete()) {
+                    System.err.println("Can't remove " + file.getAbsolutePath());
+                }
             }
-        }
     }
 }
 

@@ -8,23 +8,22 @@ class TestNosqlunitRedis extends JedisUnitSuite {
 
 
   @Test
-  def test: Unit = {
+  def test(): Unit = {
 
-    try {
-      val jedis = pool.getResource
-      try { /// ... do stuff here ... for example
-        jedis.set("foo", "bar")
-        val foobar = jedis.get("foo")
-        jedis.zadd("sose", 0, "car")
-        jedis.zadd("sose", 0, "bike")
-        val sose = jedis.zrange("sose", 0, -1)
-        jedis.set("foo", "bar")
-        val v = jedis.get("foo")
-        println(v)
+    val jedis = pool.getResource
+    try { /// ... do stuff here ... for example
+      jedis.set("foo", "bar")
+      val foobar = jedis.get("foo")
+      jedis.zadd("sose", 0, "car")
+      jedis.zadd("sose", 0, "bike")
+      val sose = jedis.zrange("sose", 0, -1)
+      jedis.set("foo", "bar")
+      val v = jedis.get("foo")
+      println(v)
 
-      } finally
-        if (jedis != null) jedis.close()
-    }
+    } finally
+      if (jedis != null) jedis.close()
+
 
   }
 

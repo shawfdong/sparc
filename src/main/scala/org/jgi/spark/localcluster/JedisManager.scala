@@ -17,11 +17,11 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
 
   val rand = new Random(System.currentTimeMillis())
 
-  val hosts_map = hostsAndPorts.groupBy(x => x._1).map(x => (x._1, x._2.map(_._2).toArray))
+  val hosts_map: Predef.Map[String, Array[Int]] = hostsAndPorts.groupBy(x => x._1).map(x => (x._1, x._2.map(_._2).toArray))
 
   val jedis_pool_map: HashMap[String, JedisPool] = new HashMap[String, JedisPool]()
 
-  def get_pool(ip: String, port: Int) = {
+  def get_pool(ip: String, port: Int): Option[JedisPool] = {
     val k: String = s"$ip $port"
     if (!jedis_pool_map.contains(k))
       jedis_pool_map.put(k, new JedisPool(ip, port))
@@ -56,28 +56,27 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
     }
   }
 
-  def getJedis(): Jedis = {
-    val ip = JavaUtils.getMatchedIP(hosts_map.map(_._1).toSeq.asJava)
+  def getJedis: Jedis = {
+    val ip = JavaUtils.getMatchedIP(hosts_map.keys.toSeq.asJava)
     val ports = hosts_map.get(ip)
     ports match {
-      case Some(x) => {
-        val random_index = rand.nextInt(x.size)
+      case Some(x) =>
+        val random_index = rand.nextInt(x.length)
         val port = x(random_index)
         getJedis(ip, port)
-      }
       case None =>
         throw new Exception(s"cannot find port for $ip")
     }
 
   }
 
-  def getJedisCluster(): JedisCluster = {
-    val ip = JavaUtils.getMatchedIP(hosts_map.map(_._1).toSeq.asJava)
+  def getJedisCluster: JedisCluster = {
+    val ip = JavaUtils.getMatchedIP(hosts_map.keys.toSeq.asJava)
     val ports = if (ip == null || !hosts_map.contains(ip))
-      hosts_map.map {
+      hosts_map.flatMap {
         x =>
           x._2.map((x._1, _))
-      }.flatten.toArray
+      }.toArray
     else
       hosts_map.get(ip) match {
         case Some(x) => x.map((ip, _))
@@ -95,7 +94,7 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
 
   def flushAll(): Unit = {
     hosts_map.foreach {
-      case (ip, ports: Array[Int]) => {
+      case (ip, ports: Array[Int]) =>
         ports.foreach {
           i =>
             val jedis = getJedis(ip, i)
@@ -105,7 +104,6 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
             }
             jedis.close()
         }
-      }
     }
   }
 }

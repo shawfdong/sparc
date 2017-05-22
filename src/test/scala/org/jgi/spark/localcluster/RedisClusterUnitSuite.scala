@@ -22,7 +22,7 @@ import scala.language.implicitConversions
 abstract class RedisClusterUnitSuite extends JUnitSuite {
   def jedisMgr = RedisClusterUnitSuite.jedisMgr
 
-  def cluster = jedisMgr.getJedisCluster()
+  def cluster = jedisMgr.getJedisCluster
 
   @After
   def tearDown(): Unit = {

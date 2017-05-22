@@ -91,14 +91,14 @@ object KmerCounting extends LazyLogging {
   def delete_hdfs_file(filepath: String): Unit = {
     import org.apache.hadoop.conf.Configuration
     import org.apache.hadoop.fs.{FileSystem, Path}
-    val conf = new Configuration();
+    val conf = new Configuration()
 
-    val output = new Path(filepath);
-    val hdfs = FileSystem.get(conf);
+    val output = new Path(filepath)
+    val hdfs = FileSystem.get(conf)
 
     // delete existing directory
     if (hdfs.exists(output)) {
-      hdfs.delete(output, true);
+      hdfs.delete(output, true)
     }
   }
 

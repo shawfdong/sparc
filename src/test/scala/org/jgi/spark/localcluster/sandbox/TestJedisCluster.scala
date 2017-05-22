@@ -27,7 +27,7 @@ class TestJedisCluster extends RedisClusterUnitSuite with Matchers {
 
   @Test def testInitialOneNode(): Unit = {
     val mgr = new JedisManager("127.0.0.1", 42005)
-    val cluster = mgr.getJedisCluster()
+    val cluster = mgr.getJedisCluster
     cluster.set("foo", "bar")
     cluster.set("test", "test")
     cluster.get("foo") shouldEqual "bar"

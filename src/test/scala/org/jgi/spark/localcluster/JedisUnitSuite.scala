@@ -31,7 +31,7 @@ object JedisUnitSuite extends JUnitSuite {
 
   val pool = new JedisPool(new JedisPoolConfig, "localhost")
 
-  Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+  Runtime.getRuntime.addShutdownHook(new Thread(new Runnable() {
     def run() {
       println("jvm exiting, destroying Jedis pool")
       pool.destroy()

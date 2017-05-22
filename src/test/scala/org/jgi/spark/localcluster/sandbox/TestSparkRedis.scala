@@ -12,7 +12,7 @@ class TestSparkRedis extends SparkRedisUnitSuite with Matchers {
 
 
   @Test
-  def test: Unit = {
+  def test(): Unit = {
     val listRDD = sc.parallelize((0 until 100).map(_.toString))
     sc.toRedisLIST(listRDD, "fruit")
     sc.fromRedisList("fruit").count should be (100)
