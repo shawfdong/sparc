@@ -72,7 +72,6 @@ object RedisClusterUnitSuite extends JUnitSuite {
   @BeforeClass
   def beforeClass(): Unit = {
     redis_home = System.getenv("REDIS_HOME")
-    redis_home="/home/bo/redis"
 
     if (redis_home == null) throw new RuntimeException("REDIS_HOME is not set")
     System.setProperty("REDIS_HOME", redis_home)
@@ -105,7 +104,6 @@ object RedisClusterUnitSuite extends JUnitSuite {
 
 
   @AfterClass def cleanUp(): Unit = {
-    jedisMgr.close()
     cluster.stop()
     if (redis_home != null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
     auxClass.afterAll()

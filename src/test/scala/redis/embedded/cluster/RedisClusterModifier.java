@@ -134,7 +134,7 @@ public class RedisClusterModifier {
         if (masters != null) setReplicates(masters);
     }
 
-    public static void delete_files(String dir, String patterns) {
+    public static void delete_files(String dir, final String patterns) {
         final File folder = new File(dir);
         final File[] files = folder.listFiles(new FilenameFilter() {
             @Override

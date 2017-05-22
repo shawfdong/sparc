@@ -135,7 +135,6 @@ object KmerCounting extends LazyLogging {
   }
 
   private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
-    flushAll(config)
     readsRDD.foreachPartition {
       iterator =>
         val cluster = getJedisManager(config).getJedisCluster
@@ -148,7 +147,7 @@ object KmerCounting extends LazyLogging {
             }
 
         }
-        cluster.close()
+        //cluster.close()
     }
 
     import com.redislabs.provider.redis._
@@ -182,18 +181,10 @@ object KmerCounting extends LazyLogging {
 
 
   def contamination(config: Config): Double = {
-    if (config.sample_fraction > 0) {
-      val oldval = config._contamination
-      oldval / config.sample_fraction
-    } else {
-      config._contamination
-    }
+    config._contamination
   }
 
   def run(config: Config, sc: SparkContext): Unit = {
-    if (config.sample_fraction > 0) {
-      logger.info(s"Since random sample is applied, adjust contamination from ${config._contamination} to ${contamination(config)}")
-    }
 
     // read seq file, Hash readID to integer
     // read all sample files
@@ -207,9 +198,12 @@ object KmerCounting extends LazyLogging {
     val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, config.sample_fraction, sc).map(_._2)
 
     smallReadsRDD.cache()
+    if (config.use_redis) flushAll(config)
     val (filenames, tmp) = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, smallReadsRDD, config, sc)
+        val t = process_iteration(i, smallReadsRDD, config, sc)
+        if (config.use_redis) flushAll(config)
+        t
     }.unzip
     smallReadsRDD.unpersist()
 

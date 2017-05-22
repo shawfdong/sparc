@@ -17,6 +17,8 @@ lazy val root = (project in file(".")).
   )
 
 javaOptions ++= Seq("-Xms2G", "-Xmx8G", "-XX:+CMSClassUnloadingEnabled")
+javacOptions ++= Seq("-source", "1.7", "-target", "1.7")
+scalacOptions += "-target:jvm-1.7"
 
 sparkVersion := "2.0.1"
 

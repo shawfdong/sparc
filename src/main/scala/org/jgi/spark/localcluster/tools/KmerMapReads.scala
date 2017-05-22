@@ -100,7 +100,7 @@ object KmerMapReads extends LazyLogging {
 
     val kmersRDD = readsRDD.map {
       case (id, seq) =>
-        Kmer.generate_kmer(seq = seq, k = config.k).filter(kmersB.value.contains(_)).distinct.map(s => (s, List(id)))
+        Kmer.generate_kmer(seq = seq, k = config.k).filter(!kmersB.value.contains(_)).distinct.map(s => (s, List(id)))
     }.flatMap(x => x).reduceByKey(_ ++ _)
 
     // subsampling very abundant k-mers that appear in many reads

@@ -15,19 +15,6 @@ import scala.util.Random
   */
 class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) extends LazyLogging {
 
-  val rand = new Random(System.currentTimeMillis())
-
-  val jedis_pool_map: HashMap[String, JedisPool] = new HashMap[String, JedisPool]()
-
-  def get_pool(ip: String, port: Int): Option[JedisPool] = {
-    val k: String = s"$ip $port"
-    if (!jedis_pool_map.contains(k))
-      jedis_pool_map.put(k, new JedisPool(ip, port))
-
-    jedis_pool_map.get(k)
-  }
-
-
   def this(ip: String, port: Int) = {
 
     this {
@@ -42,10 +29,19 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
     }
   }
 
+  val rand = new Random(System.currentTimeMillis())
 
-  def close(): Unit = {
-    jedis_pool_map.values.foreach(_.destroy())
+  def jedis_pool_map=JedisManager.jedis_pool_map
+
+  def get_pool(ip: String, port: Int): Option[JedisPool] = {
+    val k: String = s"$ip $port"
+    if (!jedis_pool_map.contains(k))
+      jedis_pool_map.put(k, new JedisPool(ip, port))
+
+    jedis_pool_map.get(k)
   }
+
+
 
   def getJedis(ip: String, port: Int): Jedis = {
     get_pool(ip, port) match {
@@ -69,7 +65,13 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
 
   }
 
+
   def getJedisCluster: JedisCluster = {
+    if (JedisManager.jedisCluster_ == null)
+      JedisManager.jedisCluster_ = makeJedisCluster
+    JedisManager.jedisCluster_
+  }
+  private def makeJedisCluster: JedisCluster = {
     val ip = JavaUtils.getMatchedIP(hostsAndPorts.map(_._1).toSeq.asJava)
     val local_ports = hostsAndPorts.filter(_._1 == ip)
     val ports =
@@ -95,10 +97,39 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
       case (ip, port) =>
         val jedis = getJedis(ip, port)
         if (!jedis.info.contains("role:slave")) {
-          jedis.flushAll()
-          logger.debug(s"flush node $ip, $port")
+          var  code = jedis.flushAll()
+          logger.debug(s"flush node $ip, $port, response $code")
+
+          if (!"OK".equals(code )) {
+            code = jedis.flushAll()
+            logger.debug(s"flush node $ip, $port, response $code")
+          }
         }
         jedis.close()
     }
   }
+}
+
+object JedisManager {
+  @transient val jedis_pool_map: HashMap[String, JedisPool] = new HashMap[String, JedisPool]()
+
+  @transient var jedisCluster_ :JedisCluster = null
+
+  def close(): Unit ={
+    if (jedis_pool_map.size >0){
+      println("JedisManager: jvm exiting, destroying jedis pool")
+      jedis_pool_map.values.foreach(_.destroy())
+    }
+
+    if (jedisCluster_ != null) {
+      println("JedisManager: jvm exiting, destroying cluster")
+      jedisCluster_.close()
+    }
+  }
+
+  Runtime.getRuntime.addShutdownHook(new Thread(new Runnable() {
+    def run(): Unit = {
+      close()
+    }
+  }))
 }
