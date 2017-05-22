@@ -70,7 +70,7 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
 
   }
 
-  def getJedisCluster: JedisCluster = {
+  val getJedisCluster: JedisCluster = {
     val ip = JavaUtils.getMatchedIP(hosts_map.keys.toSeq.asJava)
     val ports = if (ip == null || !hosts_map.contains(ip))
       hosts_map.flatMap {
