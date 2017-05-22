@@ -18,7 +18,7 @@ import scala.util.Random
 
 object GraphGen extends LazyLogging {
 
-  case class Config(kmer_reads: String = "", output: String = "", use_hdfs: Boolean = false,
+  case class Config(kmer_reads: String = "", output: String = "",
                     n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
@@ -43,11 +43,6 @@ object GraphGen extends LazyLogging {
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
-      opt[Unit]("use_hdfs").action((x, c) =>
-        c.copy(use_hdfs = true))
-        .text("Output to hdfs. Intermediate data is also use hdfs. Default false")
-
-
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
         validate(x =>
@@ -60,7 +55,7 @@ object GraphGen extends LazyLogging {
         c.copy(n_partition = x))
         .text("paritions for the input")
 
-      opt[Int]( "n_iteration").action((x, c) =>
+      opt[Int]("n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
@@ -86,19 +81,11 @@ object GraphGen extends LazyLogging {
     val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
       .map(x => Array(x._1._1, x._1._2, x._2)).toList
 
-
-    if (!config.use_hdfs) { //to local scratch file
-      val filename = "%s/GraphGen_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
-      Utils.serialize_object(filename, groupedEdges)
-      logger.info(s"Iteration $i ,#records=${groupedEdges.length} save results to $filename")
-      filename
-    } else { //rdd cache
+    if (true) { //rdd cache
       val rdd = sc.parallelize(groupedEdges)
       rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
       rdd
     }
-
-
   }
 
 
@@ -109,18 +96,18 @@ object GraphGen extends LazyLogging {
 
 
     val kmer_reads =
-      ( if (config.n_partition>0)
-          sc.textFile(config.kmer_reads,minPartitions = config.n_partition)
-        else
-          sc.textFile(config.kmer_reads)
+      (if (config.n_partition > 0)
+        sc.textFile(config.kmer_reads, minPartitions = config.n_partition)
+      else
+        sc.textFile(config.kmer_reads)
         ).
         map { line =>
           line.split(" ").apply(1).split(",").map(_.toLong)
         }
 
     kmer_reads.cache()
-    println("loaded %d kmer-reads-mapping".format(kmer_reads.count))
-    kmer_reads.take(5).map(_.mkString(",")).foreach(println)
+    logger.info("loaded %d kmer-reads-mapping".format(kmer_reads.count))
+    kmer_reads.take(5).map(_.mkString(",")).foreach(x => logger.info(x))
 
 
     val values = 0.until(config.n_iteration).map {
@@ -130,17 +117,8 @@ object GraphGen extends LazyLogging {
 
     kmer_reads.unpersist()
 
-    if (!config.use_hdfs) {
-      val filenames = values.map(_.asInstanceOf[String])
-      val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[List[Array[Long]]])
-      Utils.write_textfile(config.output, result.map(_.mkString(",")).sorted)
-      logger.info(s"total #records=${result.length} save results to ${config.output}")
-      //clean up
-      filenames.foreach {
-        fname =>
-          Files.deleteIfExists(Paths.get(fname))
-      }
-    } else { //hdfs
+    if (true) {
+      //hdfs
       val rdds = values.map(_.asInstanceOf[RDD[Array[Long]]])
       KmerCounting.delete_hdfs_file(config.output)
       val rdd = sc.union(rdds).map(_.mkString(","))

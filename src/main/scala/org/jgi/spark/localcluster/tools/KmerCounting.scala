@@ -8,7 +8,9 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
+import org.jgi.spark.localcluster.tools.GraphGen.logger
 import org.jgi.spark.localcluster.{DNASeq, JedisManager, Kmer, Utils}
 import org.spark_project.guava.net.InetAddresses
 import sext._
@@ -45,7 +47,7 @@ object KmerCounting extends LazyLogging {
 
       }.action { (x, c) =>
         val r = Utils.parseIpPort(x)
-        c.copy(redis_ip = r._1,redis_port = r._2,use_redis = true)
+        c.copy(redis_ip = r._1, redis_port = r._2, use_redis = true)
       }.text("ip:port for a node in redis cluster. Only IP supported.")
 
 
@@ -60,7 +62,7 @@ object KmerCounting extends LazyLogging {
         c.copy(n_partition = x))
         .text("paritions for the input")
 
-      opt[Int]("sleep").action((x, c) =>
+      opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
@@ -72,7 +74,7 @@ object KmerCounting extends LazyLogging {
           else failure("k is too small, should not be smaller than 11"))
         .text("length of k-mer")
 
-      opt[Int]( "n_iteration").action((x, c) =>
+      opt[Int]("n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
@@ -147,7 +149,7 @@ object KmerCounting extends LazyLogging {
             }
 
         }
-        //cluster.close()
+      //cluster.close()
     }
 
     import com.redislabs.provider.redis._
@@ -166,11 +168,10 @@ object KmerCounting extends LazyLogging {
 
     val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
 
-    val filename = "%s/kmercounting_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
+    val rdd = sc.parallelize(topKmers)
+    rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    (rdd, kmer_count)
 
-    Utils.serialize_object(filename, topKmers)
-    logger.info(s"Iteration $i , save results to $filename")
-    (filename, kmer_count)
   }
 
   private def process_iteration_spark(i: Int, readsRDD: RDD[String], config: Config): RDD[(DNASeq, Int)] = {
@@ -186,9 +187,6 @@ object KmerCounting extends LazyLogging {
 
   def run(config: Config, sc: SparkContext): Unit = {
 
-    // read seq file, Hash readID to integer
-    // read all sample files
-    // determine the partition size
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
 
@@ -199,29 +197,28 @@ object KmerCounting extends LazyLogging {
 
     smallReadsRDD.cache()
     if (config.use_redis) flushAll(config)
-    val (filenames, tmp) = 0.until(config.n_iteration).map {
+    val values = 0.until(config.n_iteration).map {
       i =>
         val t = process_iteration(i, smallReadsRDD, config, sc)
         if (config.use_redis) flushAll(config)
         t
-    }.unzip
+    }
     smallReadsRDD.unpersist()
 
-    val kmer_count = tmp.foldLeft(0l)(_ + _)
-    val topN = (kmer_count * contamination(config)).toInt
-    logger.info(s"total number of kmers: $kmer_count, take top $topN")
+    if (true) {
+      //hdfs
+      val rdds=values.map(_._1)
+      KmerCounting.delete_hdfs_file(config.output)
+      val rdd = sc.union(rdds).reduceByKey(_ + _)
+      val kmer_count = values.map(_._2).sum
+      val topN = (kmer_count * contamination(config)).toInt
+      val filteredKmer = rdd.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
+      val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
+      filteredKmerRDD.saveAsTextFile(config.output)
+      logger.info(s"total #records=${filteredKmerRDD.count}/${kmer_count}/${topN} save results to hdfs ${config.output}")
 
-
-    val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[Array[(DNASeq, Int)]]).sortBy(x => (-x._2, x._1.hashCode)).take(topN).toArray
-
-
-    Utils.write_textfile(config.output, result.map(x => x._1.to_base64 + " " + x._2.toString))
-
-
-    //clean up
-    filenames.foreach {
-      fname =>
-        Files.deleteIfExists(Paths.get(fname))
+      //cleanup
+      rdds.foreach(_.unpersist())
     }
 
     val totalTime1 = System.currentTimeMillis
