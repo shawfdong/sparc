@@ -11,8 +11,10 @@ import sext._
 /**
   * Created by Lizhen Shi on 5/14/17.
   */
-class KmerCountingSpec extends FlatSpec with Matchers with BeforeAndAfter with SharedSparkContext
+class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
 {
+  override  def conf = super.conf.set("spark.ui.enabled", "true")
+
   private val master = "local[4]"
   private val appName = "KmerCountingSpec"
   //private val checkpointDir = Files.createTempDirectory(appName).toString

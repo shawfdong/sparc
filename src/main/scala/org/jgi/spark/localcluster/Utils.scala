@@ -9,6 +9,8 @@ import java.io.FileOutputStream
 import java.io.ObjectOutputStream
 import java.net.{InetAddress, NetworkInterface}
 
+import org.spark_project.guava.net.InetAddresses
+
 /**
   * Created by Lizhen Shi on 5/14/17.
   */
@@ -74,4 +76,17 @@ object Utils {
     o
   }
 
+  def parseIpPort(x: String): (String, Int) = {
+    val lst = x.split(":")
+    if (lst.length != 2
+      || (util.Try(lst(1).toInt).isFailure || lst(1).toInt < 1)
+      || !InetAddresses.isInetAddress(lst(0)))
+      ("", -1)
+    else {
+      val lst = x.split(":")
+      val ip = lst(0)
+      val port = lst(1).toInt
+      (ip, port)
+    }
+  }
 }
