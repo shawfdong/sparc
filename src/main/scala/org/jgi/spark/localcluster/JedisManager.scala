@@ -17,8 +17,6 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
 
   val rand = new Random(System.currentTimeMillis())
 
-  val hosts_map: Predef.Map[String, Array[Int]] = hostsAndPorts.groupBy(x => x._1).map(x => (x._1, x._2.map(_._2).toArray))
-
   val jedis_pool_map: HashMap[String, JedisPool] = new HashMap[String, JedisPool]()
 
   def get_pool(ip: String, port: Int): Option[JedisPool] = {
@@ -57,53 +55,50 @@ class JedisManager(val hostsAndPorts: collection.immutable.Set[(String, Int)]) e
   }
 
   def getJedis: Jedis = {
-    val ip = JavaUtils.getMatchedIP(hosts_map.keys.toSeq.asJava)
-    val ports = hosts_map.get(ip)
-    ports match {
-      case Some(x) =>
-        val random_index = rand.nextInt(x.length)
-        val port = x(random_index)
-        getJedis(ip, port)
-      case None =>
-        throw new Exception(s"cannot find port for $ip")
-    }
+    val ip = JavaUtils.getMatchedIP(hostsAndPorts.map(_._1).toSeq.asJava)
+    val local_ports = hostsAndPorts.filter(_._1 == ip)
+    val ports =
+      if (local_ports.nonEmpty)
+        local_ports.toList
+      else
+        hostsAndPorts.toList
+
+    val random_index = rand.nextInt(ports.length)
+    val port = ports(random_index)
+    getJedis(port._1, port._2)
 
   }
 
   val getJedisCluster: JedisCluster = {
-    val ip = JavaUtils.getMatchedIP(hosts_map.keys.toSeq.asJava)
-    val ports = if (ip == null || !hosts_map.contains(ip))
-      hosts_map.flatMap {
-        x =>
-          x._2.map((x._1, _))
-      }.toArray
-    else
-      hosts_map.get(ip) match {
-        case Some(x) => x.map((ip, _))
-        case None => throw new Exception("never be here")
-      }
+    val ip = JavaUtils.getMatchedIP(hostsAndPorts.map(_._1).toSeq.asJava)
+    val local_ports = hostsAndPorts.filter(_._1 == ip)
+    val ports =
+      if (local_ports.nonEmpty)
+        local_ports.toList
+      else
+        hostsAndPorts.toList
 
-    val hostsAndPorts = new util.HashSet[HostAndPort]
+    val hostsAndPorts2 = new util.HashSet[HostAndPort]
     scala.util.Random.shuffle(ports.toSeq).map(x => new HostAndPort(x._1, x._2)).toSet.foreach {
-      x: HostAndPort => hostsAndPorts.add(x)
+      x: HostAndPort => hostsAndPorts2.add(x)
     }
-    new JedisCluster(hostsAndPorts)
+    new JedisCluster(hostsAndPorts2)
 
   }
 
+  def getSeedNode(): (String, Int) = {
+    Random.shuffle(this.hostsAndPorts).head
+  }
 
   def flushAll(): Unit = {
-    hosts_map.foreach {
-      case (ip, ports: Array[Int]) =>
-        ports.foreach {
-          i =>
-            val jedis = getJedis(ip, i)
-            if (!jedis.info.contains("role:slave")) {
-              jedis.flushAll()
-              logger.debug(s"flush node $ip, $i")
-            }
-            jedis.close()
+    hostsAndPorts.foreach {
+      case (ip, port) =>
+        val jedis = getJedis(ip, port)
+        if (!jedis.info.contains("role:slave")) {
+          jedis.flushAll()
+          logger.debug(s"flush node $ip, $port")
         }
+        jedis.close()
     }
   }
 }
