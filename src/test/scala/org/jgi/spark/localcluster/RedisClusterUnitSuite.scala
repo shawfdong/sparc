@@ -19,20 +19,25 @@ import scala.language.implicitConversions
 /**
   * Created by Lizhen Shi on 5/21/17.
   */
-class RedisClusterUnitSuite extends JUnitSuite {
-  def cluster = RedisClusterUnitSuite.jedisMgr.jedisCluster
+abstract class RedisClusterUnitSuite extends JUnitSuite {
+  def jedisMgr = RedisClusterUnitSuite.jedisMgr
+
+  def cluster = jedisMgr.getJedisCluster()
 
   @After
   def tearDown(): Unit = {
-    cluster.getClusterNodes.foreach {
-      case (name, pool) =>
-        println(s"flush node $name")
-        val jedis = pool.getResource
-        if (!jedis.info.contains("role:slave"))
-          jedis.flushAll()
-        jedis.close()
-    }
+    jedisMgr.flushAll()
+    if (false) {
+      cluster.getClusterNodes.foreach {
+        case (name, pool) =>
+          println(s"flush node $name")
+          val jedis = pool.getResource
+          if (!jedis.info.contains("role:slave"))
+            jedis.flushAll()
+          jedis.close()
+      }
 
+    }
   }
 }
 
@@ -76,7 +81,7 @@ object RedisClusterUnitSuite extends JUnitSuite {
         e.printStackTrace()
     }
 
-    jedisMgr=new JedisManager(ports.map(x=>("127.0.0.1",x.toInt)).toSet)
+    jedisMgr = new JedisManager(ports.map(x => ("127.0.0.1", x.toInt)).toSet)
 
   }
 
@@ -84,7 +89,7 @@ object RedisClusterUnitSuite extends JUnitSuite {
   @AfterClass def cleanUp(): Unit = {
     jedisMgr.close()
     cluster.stop()
-    if (redis_home !=null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
+    if (redis_home != null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
 
   }
 

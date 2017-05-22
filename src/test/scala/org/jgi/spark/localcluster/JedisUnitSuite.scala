@@ -10,7 +10,7 @@ import redis.clients.jedis.JedisPoolConfig
 /**
   * Created by Lizhen Shi on 5/18/17.
   */
-class JedisUnitSuite extends JUnitSuite {
+abstract class JedisUnitSuite extends JUnitSuite {
   val redisRule_ = newRedisRule.defaultManagedRedis
 
   @Rule

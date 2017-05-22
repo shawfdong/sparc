@@ -91,7 +91,6 @@ public class JavaUtils {
             while (ee.hasMoreElements()) {
                 InetAddress i = (InetAddress) ee.nextElement();
                 ips.add(i);
-                System.out.println(i.getHostAddress());
             }
         }
         return ips;

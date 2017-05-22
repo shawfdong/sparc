@@ -6,7 +6,7 @@ import org.junit.{AfterClass, BeforeClass, Rule}
 /**
   * Created by Lizhen Shi on 5/18/17.
   */
-class SparkRedisUnitSuite extends JedisUnitSuite {
+abstract class SparkRedisUnitSuite extends JedisUnitSuite {
   def sc=SparkRedisUnitSuite.sc
 
 }
