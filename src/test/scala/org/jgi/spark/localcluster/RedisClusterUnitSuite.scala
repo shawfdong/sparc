@@ -1,112 +1,96 @@
 package org.jgi.spark.localcluster
 
+import java.io.{File, FilenameFilter}
+import java.util
+import java.util.{List, UUID}
+
 import org.junit.BeforeClass
 import org.scalatest.junit.JUnitSuite
-import redis.clients.jedis.{Jedis, JedisPoolConfig}
+import redis.clients.jedis.{HostAndPort, JedisCluster}
 import org.junit.After
 import org.junit.AfterClass
-import redis.clients.jedis.JedisCluster.Reset
-import redis.clients.jedis.JedisCluster
+import redis.embedded.{Redis, RedisServer}
+import redis.embedded.cluster.{RedisCluster, RedisClusterModifier}
+
+import collection.JavaConversions._
+import scala.language.implicitConversions
+
 
 /**
   * Created by Lizhen Shi on 5/21/17.
   */
 class RedisClusterUnitSuite extends JUnitSuite {
-  def node1 = RedisClusterUnitSuite.node1
-
-  def node2 = RedisClusterUnitSuite.node2
-
-  def node3 = RedisClusterUnitSuite.node3
+  def cluster = RedisClusterUnitSuite.jedisCluster
 
   @After
   def tearDown(): Unit = {
-    RedisClusterUnitSuite.cleanUp()
+    cluster.getClusterNodes.foreach {
+      case (name, pool) =>
+        println(s"flush node $name")
+        val jedis = pool.getResource
+        if (!jedis.info.contains("role:slave"))
+          jedis.flushAll()
+        jedis.close()
+    }
+
   }
 }
 
 
 object RedisClusterUnitSuite extends JUnitSuite {
-  private val nodeInfo1 = HostAndPortUtil.getClusterServers.get(0)
-  private val nodeInfo2 = HostAndPortUtil.getClusterServers.get(1)
-  private val nodeInfo3 = HostAndPortUtil.getClusterServers.get(2)
-  private val nodeInfo4 = HostAndPortUtil.getClusterServers.get(3)
-  private val nodeInfoSlave2 = HostAndPortUtil.getClusterServers.get(4)
+  private var cluster: RedisCluster = _
+  var jedisCluster: JedisCluster = _
 
-  private var node1 = new Jedis(nodeInfo1.getHost, nodeInfo1.getPort)
-  private val node2 = new Jedis(nodeInfo2.getHost, nodeInfo2.getPort)
-  private val node3 = new Jedis(nodeInfo3.getHost, nodeInfo3.getPort)
-  private val node4 = new Jedis(nodeInfo4.getHost, nodeInfo4.getPort)
-  private val nodeSlave2 = new Jedis(nodeInfoSlave2.getHost, nodeInfoSlave2.getPort)
-  private val localHost = "127.0.0.1"
+  val tmp_dir = "/tmp"
 
-  private val DEFAULT_TIMEOUT = 2000
-  private val DEFAULT_REDIRECTIONS = 5
-  private val DEFAULT_CONFIG = new JedisPoolConfig
+  var redis_home: String = _
 
-
+  ///redis_cluster_test_"+UUID.randomUUID()
   @BeforeClass
   def beforeClass(): Unit = {
-    node1.auth("cluster")
-    node1.flushAll
-    node2.auth("cluster")
-    node2.flushAll
-    node3.auth("cluster")
-    node3.flushAll
-    node4.auth("cluster")
-    node4.flushAll
-    nodeSlave2.auth("cluster")
-    nodeSlave2.flushAll
-    // ---- configure cluster
-    // add nodes to cluster
-    node1.clusterMeet(RedisClusterUnitSuite.localHost, RedisClusterUnitSuite.nodeInfo2.getPort)
-    node1.clusterMeet(RedisClusterUnitSuite.localHost, RedisClusterUnitSuite.nodeInfo3.getPort)
-    // split available slots across the three nodes
 
-    val slotsPerNode = JedisCluster.HASHSLOTS / 3
-    val node1Slots = new Array[Int](slotsPerNode)
-    val node2Slots = new Array[Int](slotsPerNode + 1)
-    val node3Slots = new Array[Int](slotsPerNode)
-    var i = 0
-    var slot1 = 0
-    var slot2 = 0
-    var slot3 = 0
-    while ( {
-      i < JedisCluster.HASHSLOTS
-    }) {
-      if (i < slotsPerNode) node1Slots({
-        slot1 += 1;
-        slot1 - 1
-      }) = i
-      else if (i > slotsPerNode * 2) node3Slots({
-        slot3 += 1;
-        slot3 - 1
-      }) = i
-      else node2Slots({
-        slot2 += 1;
-        slot2 - 1
-      }) = i
+    redis_home = System.getenv("REDIS_HOME")
+    if (redis_home == null) throw new RuntimeException("REDIS_HOME is not set")
+    System.setProperty("REDIS_HOME", redis_home)
 
-      {
-        i += 1;
-        i - 1
-      }
+
+    import redis.embedded.RedisExecProvider
+    import redis.embedded.util.OS
+    val provider = RedisExecProvider.build().`override`(OS.UNIX, redis_home + "/src/redis-server")
+
+    val ports = Array(42000, 42001, 42002, 42003, 42004, 42005).map(i => i: java.lang.Integer)
+
+
+    cluster = new RedisCluster.Builder()
+      .withServerBuilder(new RedisServer.Builder().redisExecProvider(provider).setting(s"dir $tmp_dir"))
+      .serverPorts(java.util.Arrays.asList(ports: _*))
+      .numOfReplicates(1)
+      .numOfMasters(ports.length)
+      .numOfRetries(5)
+      .build()
+    try {
+      val modifier = new RedisClusterModifier(cluster)
+      modifier.start()
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
     }
-    node1.clusterAddSlots(node1Slots: _*)
-    node2.clusterAddSlots(node2Slots: _*)
-    node3.clusterAddSlots(node3Slots: _*)
-    JedisClusterTestUtil.waitForClusterReady(node1, node2, node3)
+
+    val jedisClusterNodes = new util.HashSet[HostAndPort]()
+    ports.foreach {
+      i =>
+        println(s"Port $i")
+        jedisClusterNodes.add(new HostAndPort("127.0.0.1", i))
+    }
+    jedisCluster = new JedisCluster(jedisClusterNodes)
   }
 
 
   @AfterClass def cleanUp(): Unit = {
-    node1.flushDB
-    node2.flushDB
-    node3.flushDB
-    node4.flushDB
-    node1.clusterReset(Reset.SOFT)
-    node2.clusterReset(Reset.SOFT)
-    node3.clusterReset(Reset.SOFT)
-    node4.clusterReset(Reset.SOFT)
+    jedisCluster.close()
+    cluster.stop()
+    if (redis_home !=null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
+
   }
 
 
