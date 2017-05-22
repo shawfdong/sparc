@@ -7,6 +7,7 @@ import com.twitter.chill.{Input, Kryo, Output}
 import org.apache.commons.io.filefilter.WildcardFileFilter
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
+import java.net.{InetAddress, NetworkInterface}
 
 /**
   * Created by Lizhen Shi on 5/14/17.

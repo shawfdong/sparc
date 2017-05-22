@@ -20,7 +20,7 @@ import scala.language.implicitConversions
   * Created by Lizhen Shi on 5/21/17.
   */
 class RedisClusterUnitSuite extends JUnitSuite {
-  def cluster = RedisClusterUnitSuite.jedisCluster
+  def cluster = RedisClusterUnitSuite.jedisMgr.jedisCluster
 
   @After
   def tearDown(): Unit = {
@@ -39,7 +39,7 @@ class RedisClusterUnitSuite extends JUnitSuite {
 
 object RedisClusterUnitSuite extends JUnitSuite {
   private var cluster: RedisCluster = _
-  var jedisCluster: JedisCluster = _
+  var jedisMgr: JedisManager = _
 
   val tmp_dir = "/tmp"
 
@@ -76,18 +76,13 @@ object RedisClusterUnitSuite extends JUnitSuite {
         e.printStackTrace()
     }
 
-    val jedisClusterNodes = new util.HashSet[HostAndPort]()
-    ports.foreach {
-      i =>
-        println(s"Port $i")
-        jedisClusterNodes.add(new HostAndPort("127.0.0.1", i))
-    }
-    jedisCluster = new JedisCluster(jedisClusterNodes)
+    jedisMgr=new JedisManager(ports.map(x=>("127.0.0.1",x.toInt)).toSet)
+
   }
 
 
   @AfterClass def cleanUp(): Unit = {
-    jedisCluster.close()
+    jedisMgr.close()
     cluster.stop()
     if (redis_home !=null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
 
