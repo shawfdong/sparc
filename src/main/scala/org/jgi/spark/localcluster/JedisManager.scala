@@ -44,7 +44,9 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
     if (!jedis_pool_ins_map.contains(ipAndPort)) {
       val (ip, port) = ipAndPort
 
-      jedis_pool_ins_map.put(ipAndPort, new JedisPool(ip, port))
+      val  poolConfig = new JedisPoolConfig()
+      poolConfig.setMaxTotal(256); // maximum active connections
+      jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port))
     }
     jedis_pool_ins_map.get(ipAndPort)
   }
@@ -138,18 +140,22 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
     }
   }
 
-  def incr_batch(keys: collection.immutable.Iterable[DNASeq]): Unit = {
-    keys.map(x => (x, 1)).groupBy(_._1).map { x => (x._1.hashCode, x._1, x._2.map(_._2).sum) }
+  def server_size ={
+    this._hostsAndPorts.length
+  }
+  def incr_batch(keys: collection.Iterable[DNASeq]): Unit = {
+    keys.map(x => (x, 1)).groupBy(_._1).map { x => (x._1.hashCode % server_size , x._1, x._2.map(_._2).sum) }
       .groupBy(_._1).foreach {
       case (hashVal, grouped) =>
-        val slot = hashVal % n_slot_per_ins
-        val jedis = getJedis_by_hash(hashVal)
+        var slot=hashVal % n_slot_per_ins
+        val jedis = getJedis_by_hash(slot)
         val p = jedis.pipelined()
         try {
           grouped.foreach {
             case (_, k, v) =>
               p.hincrBy(SafeEncoder.encode(slot.toString), k.bytes, v)
           }
+          p.sync()
         } finally {
           jedis.close()
         }
@@ -207,7 +213,7 @@ object JedisManagerSingleton extends LazyLogging {
 
   def instance(hostsAndPorts: Array[(String, Int)]): JedisManager = {
     if (_instance == null) {
-      logger.info("creating singlton instance for the first time.")
+      logger.info("create singlton instance for the first time.")
       logger.info(hostsAndPorts.map(x => x._1 + ":" + x._2.toString).mkString(" "))
 
       _instance = new JedisManager(hostsAndPorts.toSet)

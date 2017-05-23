@@ -1,13 +1,11 @@
 package org.jgi.spark.localcluster.rdd
 
-import java.util
-
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
-import org.jgi.spark.localcluster.{DNASeq, JedisManager, JedisManagerSingleton}
-import redis.clients.jedis.{Jedis, ScanParams}
+import org.jgi.spark.localcluster.{DNASeq, JavaUtils, JedisManagerSingleton}
 import redis.clients.util.SafeEncoder
-import collection.JavaConverters._
+
 import scala.collection.JavaConversions._
 
 /**
@@ -15,7 +13,7 @@ import scala.collection.JavaConversions._
   */
 class RedisKmerCountRDD
 (sc: SparkContext, val hostsAndPorts: Array[(String, Int)], val n_slot_per_ins: Int)
-  extends RDD[(DNASeq, Int)](sc, Seq.empty) {
+  extends RDD[(DNASeq, Int)](sc, Seq.empty) with LazyLogging {
 
   override protected def getPreferredLocations(split: Partition): Seq[String] = {
     Seq(split.asInstanceOf[RedisPartition].ip)
@@ -23,19 +21,26 @@ class RedisKmerCountRDD
 
 
   override protected def getPartitions: Array[Partition] = {
-    hostsAndPorts.zipWithIndex.map {
-      case ((ip, port), i) =>
-        new RedisPartition(i, ip, port, n_slot_per_ins)
+    hostsAndPorts.map {
+      case (ip, port) =>
+        0.until(n_slot_per_ins).map(j => (ip, port, j))
+    }.flatten.zipWithIndex.map {
+      case ((ip, port, slot), idx) =>
+        new RedisPartition(idx, ip, port, slot)
     }
+
   }
 
   override def compute(split: Partition, context: TaskContext): Iterator[(DNASeq, Int)] = {
     val partition: RedisPartition = split.asInstanceOf[RedisPartition]
-
+    val ips = JavaUtils.getAllIPs.map(_.getHostAddress)
+    if (!ips.contains(partition.ip)) {
+      logger.info(s"partation ip ${partition.ip} is not the node ip ${ips.mkString(",")}")
+    }
     val jedis = JedisManagerSingleton.instance(hostsAndPorts).getJedis(partition.ip, partition.port)
 
-    val p = jedis.pipelined()
-    val resp = p.hgetAll(SafeEncoder.encode(partition.slot.toString)).get
+    val resp = jedis.hgetAll(SafeEncoder.encode(partition.slot.toString))
+
     val result = resp.map(x => (new DNASeq(x._1), SafeEncoder.encode(x._2).toInt))
 
     jedis.close()

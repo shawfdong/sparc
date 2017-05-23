@@ -39,14 +39,13 @@ class DNASeq(val bytes: Array[Byte]) extends Ordered[DNASeq] with Serializable {
   }
 
   override def hashCode: Int = {
-    if (bytes.length >= 4)
-      java.nio.ByteBuffer.wrap(bytes.take(4)).getInt()
-    else {
+    if (bytes.length >= 4) {
+      val v = java.nio.ByteBuffer.wrap(bytes.take(4)).getInt()
+      if (v > 0) v else -v
+    } else {
       var h: Int = 0
-      bytes.indices.foreach { i =>
-        h = (h << 8) + bytes(i)
-      }
-      h
+      bytes.indices.foreach { i => h = (h << 8) + bytes(i) }
+      if (h > 0) h else -h
     }
   }
 

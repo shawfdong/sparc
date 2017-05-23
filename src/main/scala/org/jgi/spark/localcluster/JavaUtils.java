@@ -12,9 +12,9 @@ import java.util.regex.Pattern;
 /**
  * Created by Lizhen Shi on 5/21/17.
  */
-class JavaUtils {
+public class JavaUtils {
 
-    static List<InetAddress> getAllIPs() throws SocketException {
+    public static List<InetAddress> getAllIPs() throws SocketException {
         Enumeration e = NetworkInterface.getNetworkInterfaces();
         ArrayList<InetAddress> ips = new ArrayList<>();
         while (e.hasMoreElements()) {

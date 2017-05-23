@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.{DNASeq, JedisManager, Kmer, Utils}
+import org.jgi.spark.localcluster._
 import sext._
 
 
@@ -16,7 +16,7 @@ object KmerCounting extends LazyLogging {
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0, sample_fraction: Double = -1.0,
-                    redis_ip: String = "", redis_port: Int = 0, use_redis: Boolean = false)
+                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2)
 
   var jedisManager = None: Option[JedisManager]
 
@@ -34,17 +34,19 @@ object KmerCounting extends LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
 
-      opt[String]("redis").valueName("<ip:port>").validate { x =>
-        if (Utils.parseIpPort(x)._2 < 1)
+      opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
+        var t = x.split(",").map {
+          u =>
+            if (Utils.parseIpPort(u)._2 < 1) 1 else 0
+        }.sum
+        if (t > 0)
           failure("format is not correct")
         else
           success
-
       }.action { (x, c) =>
-        val r = Utils.parseIpPort(x)
-        c.copy(redis_ip = r._1, redis_port = r._2, use_redis = true)
-      }.text("ip:port for a node in redis cluster. Only IP supported.")
-
+        val r = x.split(",").map(Utils.parseIpPort(_))
+        c.copy(redis_ip_ports = r, use_redis = true)
+      }.text("ip:port for redis servers. Only IP supported.")
 
       opt[String]("format").valueName("<format>").action((x, c) =>
         c.copy(format = x)).
@@ -52,6 +54,14 @@ object KmerCounting extends LazyLogging {
           if (List("seq", "parquet", "base64").contains(x)) success
           else failure("only valid for seq, parquet or base64")
         ).text("input format (seq, parquet or base64)")
+
+      opt[Int]("n_redis_slot").
+        validate(x =>
+          if (x>0) success else failure("should be positve")
+        ).action((x, c) =>
+        c.copy(n_redis_slot = x))
+        .text("hash key slots for one redis instance")
+
 
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
@@ -116,14 +126,7 @@ object KmerCounting extends LazyLogging {
   }
 
   def getJedisManager(config: Config): JedisManager = {
-    jedisManager match {
-      case Some(x) =>
-        x
-      case None =>
-        val x = new JedisManager(config.redis_ip, config.redis_port)
-        jedisManager = Some(x)
-        x
-    }
+    JedisManagerSingleton.instance(config.redis_ip_ports)
   }
 
   def flushAll(config: Config): Unit = {
@@ -132,22 +135,31 @@ object KmerCounting extends LazyLogging {
   }
 
   private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
+    val THRESH_HOLD = 1024 * 32
     readsRDD.foreachPartition {
       iterator =>
+        val buf = scala.collection.mutable.ArrayBuffer.empty[DNASeq]
         val cluster = getJedisManager(config)
         iterator.foreach {
           line =>
             Kmer.generate_kmer(seq = line, k = config.k)
               .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
               s =>
-                cluster.incr(s)
+                buf.append(s)
+                if (buf.length > THRESH_HOLD) {
+                  cluster.incr_batch(buf)
+                  buf.clear()
+                }
             }
-
+        }
+        //remained
+        if (buf.nonEmpty) {
+          cluster.incr_batch(buf)
+          buf.clear()
         }
     }
-
-   // sc.fromRedisKV("*").map(x => (DNASeq.from_base64(x._1), x._2.toInt))
-    sc.parallelize(Array(("GGG",12))).map(x => (DNASeq.from_bases(x._1), x._2.toInt))
+    import org.jgi.spark.localcluster.rdd._
+    sc.kmerCountFromRedis(config.redis_ip_ports, config.n_redis_slot)
   }
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
@@ -201,7 +213,7 @@ object KmerCounting extends LazyLogging {
 
     if (true) {
       //hdfs
-      val rdds=values.map(_._1)
+      val rdds = values.map(_._1)
       KmerCounting.delete_hdfs_file(config.output)
       val rdd = sc.union(rdds).reduceByKey(_ + _)
       val kmer_count = values.map(_._2).sum
@@ -231,10 +243,6 @@ object KmerCounting extends LazyLogging {
         logger.info(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Counting")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
-        if (config.use_redis) {
-          conf.set("redis.host", config.redis_ip)
-            .set("redis.port", config.redis_port.toString)
-        }
         val sc = new SparkContext(conf)
         run(config, sc)
         if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
