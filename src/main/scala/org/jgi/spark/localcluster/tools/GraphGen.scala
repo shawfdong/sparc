@@ -109,7 +109,6 @@ object GraphGen extends LazyLogging {
         process_iteration(i, kmer_reads, config, sc)
     }
 
-    kmer_reads.unpersist()
 
     if (true) {
       //hdfs
@@ -120,6 +119,7 @@ object GraphGen extends LazyLogging {
       logger.info(s"total #records=${rdd.count} save results to hdfs ${config.output}")
 
       //cleanup
+      kmer_reads.unpersist()
       rdds.foreach(_.unpersist())
     }
 

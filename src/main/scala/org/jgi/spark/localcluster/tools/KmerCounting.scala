@@ -209,7 +209,6 @@ object KmerCounting extends LazyLogging {
         if (config.use_redis) flushAll(config)
         t
     }
-    smallReadsRDD.unpersist()
 
     if (true) {
       //hdfs
@@ -224,6 +223,7 @@ object KmerCounting extends LazyLogging {
       logger.info(s"total #records=${filteredKmerRDD.count}/${kmer_count}/${topN} save results to hdfs ${config.output}")
 
       //cleanup
+      smallReadsRDD.unpersist()
       rdds.foreach(_.unpersist())
     }
 

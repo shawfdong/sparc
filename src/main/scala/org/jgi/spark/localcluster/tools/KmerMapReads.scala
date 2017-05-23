@@ -8,6 +8,7 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.{DNASeq, Kmer, Utils}
 import sext._
@@ -76,7 +77,7 @@ object KmerMapReads extends LazyLogging {
           else failure("max_kmer_count should be greater than 2"))
         .text("maximum number of reads that shares a kmer. greater than max_kmer_count, however don't be too big")
 
-      opt[Int](  "n_iteration").action((x, c) =>
+      opt[Int]("n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
@@ -95,30 +96,33 @@ object KmerMapReads extends LazyLogging {
   }
 
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: RDD[DNASeq], config: Config, sc: SparkContext) = {
-    val kmersB = sc.broadcast(kmers.filter(s => Utils.pos_mod(s.hashCode, config.n_iteration) == i).collect.toSet)
+    val kmersB = sc.broadcast(kmers.collect.toSet)
     logger.info("iteration %d, broadcaset %d kmers".format(i, kmersB.value.size))
 
-    val kmersRDD = readsRDD.map {
-      case (id, seq) =>
-        Kmer.generate_kmer(seq = seq, k = config.k).filter(!kmersB.value.contains(_)).distinct.map(s => (s, List(id)))
+    val kmersRDD = readsRDD.mapPartitions {
+      iterator =>
+        iterator.map {
+          case (id, seq) =>
+            Kmer.generate_kmer(seq = seq, k = config.k).filter(!kmersB.value.contains(_))
+              .filter(x => Utils.pos_mod(x.hashCode, config.n_iteration) == 0).distinct.map(s => (s, Set(id)))
+        }
     }.flatMap(x => x).reduceByKey(_ ++ _)
 
     // subsampling very abundant k-mers that appear in many reads
     // remove very rare k-mers that appear only in one read: likely due to sequencing error
     val filteredKmersRDD = kmersRDD.filter {
-      x => x._2.length >= config.min_kmer_count
+      x => x._2.size >= config.min_kmer_count
     }.map {
-      x => if (x._2.length <= config.max_kmer_count) x else (x._1, Random.shuffle(x._2).take(config.max_kmer_count))
-    }.collect
+      x => if (x._2.size <= config.max_kmer_count) x else (x._1, Random.shuffle(x._2).take(config.max_kmer_count))
+    }
+
+    filteredKmersRDD.persist(StorageLevel.MEMORY_AND_DISK)
+    logger.info(s"Finish Iteration $i with count ${filteredKmersRDD.count}")
 
     kmersB.destroy()
 
-    val filename = "%s/KmerMapping_%d_%s.ser".format(config.scratch_dir, i, UUID.randomUUID.toString)
+    filteredKmersRDD
 
-    Utils.serialize_object(filename, filteredKmersRDD)
-    logger.info(s"Iteration $i ,#records=${filteredKmersRDD.length} save results to $filename")
-
-    filename
   }
 
   def make_reads_rdd(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[(Long, String)] = {
@@ -173,30 +177,27 @@ object KmerMapReads extends LazyLogging {
     val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
-    val kmers =
-      sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
+    val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
     kmers.cache()
     println("loaded %d kmers".format(kmers.count))
     kmers.take(5).foreach(println)
 
 
-    val filenames = 0.until(config.n_iteration).map {
+    val rdds = 0.until(config.n_iteration).map {
       i =>
         process_iteration(i, readsRDD, kmers, config, sc)
     }
 
-    kmers.unpersist()
-    readsRDD.unpersist()
-
-    val result = filenames.map(Utils.unserialize_object).flatMap(_.asInstanceOf[Array[(DNASeq, List[Long])]]).groupBy(_._1).map(x => (x._1, x._2.flatMap(_._2))).toList
-
-    Utils.write_textfile(config.output, result.map(x => x._1.to_base64 + " " + x._2.mkString(",")).sorted)
+    KmerCounting.delete_hdfs_file(config.output)
+    sc.union(rdds).map(x => x).groupBy(_._1)
+      .map(x => (x._1, x._2.flatMap(_._2)))
+      .map(x => x._1.to_base64 + " " + x._2.mkString(","))
+      .saveAsTextFile(config.output)
 
     //clean up
-    filenames.foreach {
-      fname =>
-        Files.deleteIfExists(Paths.get(fname))
-    }
+    rdds.foreach(_.unpersist())
+    kmers.unpersist()
+    readsRDD.unpersist()
 
     val totalTime1 = System.currentTimeMillis
     logger.info("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))

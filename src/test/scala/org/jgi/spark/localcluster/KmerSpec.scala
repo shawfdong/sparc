@@ -22,31 +22,8 @@ class KmerSpec extends FlatSpec with Matchers {
   "Kmer generator" should "generate n-k+1 kmers" in {
     val seq = "ATCGATC"
     val k = 3
-    val kmers = Kmer.generate_kmer(seq, k, with_reverse_complements = false, distinct = false)
+    val kmers = Kmer.generate_kmer(seq, k)
     kmers.length shouldEqual seq.length - k + 1
-  }
-  it should "generate 2*(n-k+1) kmers when considering reverse complements" in {
-    val seq = "ATCGATC"
-    val k = 3
-    val kmers = Kmer.generate_kmer(seq, k, with_reverse_complements = true, distinct = false)
-    kmers.length shouldEqual (seq.length - k + 1) * 2
-  }
-
-  it should "generate less kmers when only counting distinct kmers" in {
-    val seq = "ATCGATC"
-    val k = 3
-    val kmers = Kmer.generate_kmer(seq, k, with_reverse_complements = false, distinct = true)
-    println(kmers.length)
-    kmers.sorted.foreach(println)
-    kmers.length should be < seq.length - k + 1
-  }
-  it should "also generate less kmers when only counting distinct kmers when counting distinctly" in {
-    val seq = "ATCGATC"
-    val k = 3
-    val kmers = Kmer.generate_kmer(seq, k, with_reverse_complements = true, distinct = true)
-    println(kmers.length)
-    kmers.sorted.foreach(println)
-    kmers.length should be < (seq.length - k + 1) * 2
   }
 
 
