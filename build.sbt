@@ -47,12 +47,10 @@ libraryDependencies ++= Seq(
 
   "org.scalatest" % "scalatest_2.11" % "2.2.2" % "provided",
   "com.holdenkarau" % "spark-testing-base_2.11" % "2.0.1_0.6.0" % "provided",
-  "com.lordofthejars" % "nosqlunit-redis" % "0.14.0"  % "provided",
   "eu.monniot.redis" % "embedded-redis" % "1.2.2" % "provided"
 
 )
 
-spDependencies +=  "RedisLabs/spark-redis:0.3.2"
 spIgnoreProvided := true
 
 assemblyMergeStrategy in assembly := {

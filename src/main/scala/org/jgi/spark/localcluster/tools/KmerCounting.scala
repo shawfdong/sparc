@@ -134,21 +134,20 @@ object KmerCounting extends LazyLogging {
   private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
     readsRDD.foreachPartition {
       iterator =>
-        val cluster = getJedisManager(config).getJedisCluster
+        val cluster = getJedisManager(config)
         iterator.foreach {
           line =>
             Kmer.generate_kmer(seq = line, k = config.k)
-              .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).map(_.to_base64).foreach {
-              str =>
-                cluster.incr(str)
+              .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
+              s =>
+                cluster.incr(s)
             }
 
         }
-      //cluster.close()
     }
 
-    import com.redislabs.provider.redis._
-    sc.fromRedisKV("*").map(x => (DNASeq.from_base64(x._1), x._2.toInt))
+   // sc.fromRedisKV("*").map(x => (DNASeq.from_base64(x._1), x._2.toInt))
+    sc.parallelize(Array(("GGG",12))).map(x => (DNASeq.from_bases(x._1), x._2.toInt))
   }
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {

@@ -28,16 +28,14 @@ abstract class RedisClusterUnitSuite extends JUnitSuite  {
 
   def jedisMgr = RedisClusterUnitSuite.jedisMgr
 
-  def cluster = jedisMgr.getJedisCluster
-
   @After
   def tearDown(): Unit = {
 
     jedisMgr.flushAll()
     if (false) {
-      cluster.getClusterNodes.foreach {
-        case (name, pool) =>
-          println(s"flush node $name")
+      jedisMgr.jedis_pool_ins_map.values
+       .  foreach {
+          pool  =>
           val jedis = pool.getResource
           if (!jedis.info.contains("role:slave"))
             jedis.flushAll()
@@ -50,25 +48,24 @@ abstract class RedisClusterUnitSuite extends JUnitSuite  {
 
 
 object RedisClusterUnitSuite extends JUnitSuite {
-  val ports = Array(42000, 42001, 42002, 42003, 42004, 42005).map(i => i: java.lang.Integer)
+  val ports = Array(42000, 42001, 42002).map(i => i: java.lang.Integer)
 
   class AuxClass extends  FunSpec with    SharedSparkContext {
 
     override def conf: SparkConf ={
-      super.conf.set("redis.host",  "127.0.0.1").set("redis.port", ports.head.toString).set("spark.ui.enabled", "true")
+      super.conf.set("spark.ui.enabled", "true")
     }
   }
 
-  private var cluster: RedisCluster = _
   var jedisMgr: JedisManager = _
 
   val tmp_dir = "/tmp"
 
-  var redis_home: String = _
+  var redis_home: String = null
 
   val auxClass=new AuxClass
 
-
+  var servers:Array[RedisServer] = null
   @BeforeClass
   def beforeClass(): Unit = {
     redis_home = System.getenv("REDIS_HOME")
@@ -82,20 +79,15 @@ object RedisClusterUnitSuite extends JUnitSuite {
     val provider = RedisExecProvider.build().`override`(OS.UNIX, redis_home + "/src/redis-server")
 
 
-    cluster = new RedisCluster.Builder()
-      .withServerBuilder(new RedisServer.Builder().redisExecProvider(provider).setting(s"dir $tmp_dir"))
-      .serverPorts(java.util.Arrays.asList(ports: _*))
-      .numOfReplicates(1)
-      .numOfMasters(ports.length)
-      .numOfRetries(5)
-      .build()
-    try {
-      val modifier = new RedisClusterModifier(cluster)
-      modifier.start()
-    } catch {
-      case e: Exception =>
-        e.printStackTrace()
+    servers = ports.map{
+      port=>
+      new RedisServer.Builder()
+        .redisExecProvider(provider)
+        .port(port )
+        .build()
     }
+
+    servers.foreach(_.start())
 
     jedisMgr = new JedisManager(ports.map(x => ("127.0.0.1", x.toInt)).toSet)
     auxClass.beforeAll()
@@ -104,7 +96,7 @@ object RedisClusterUnitSuite extends JUnitSuite {
 
 
   @AfterClass def cleanUp(): Unit = {
-    cluster.stop()
+    if (servers !=null) servers.foreach(_.stop())
     if (redis_home != null) RedisClusterModifier.delete_files(redis_home + "/src/", ".*4200.*")
     auxClass.afterAll()
   }
