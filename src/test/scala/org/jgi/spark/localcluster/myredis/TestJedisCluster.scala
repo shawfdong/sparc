@@ -1,6 +1,4 @@
-package org.jgi.spark.localcluster.sandbox
-
-import java.util
+package org.jgi.spark.localcluster.myredis
 
 import org.jgi.spark.localcluster._
 import org.junit.Test

@@ -3,7 +3,8 @@ package org.jgi.spark.localcluster.rdd
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
-import org.jgi.spark.localcluster.{DNASeq, JavaUtils, JedisManagerSingleton}
+import org.jgi.spark.localcluster.myredis.JedisManagerSingleton
+import org.jgi.spark.localcluster.{DNASeq, JavaUtils}
 import redis.clients.util.SafeEncoder
 
 import scala.collection.JavaConversions._

@@ -1,7 +1,7 @@
 package org.jgi.spark.localcluster.tools
 
 import com.holdenkarau.spark.testing.SharedSparkContext
-import org.jgi.spark.localcluster.RedisClusterUnitSuite
+import org.jgi.spark.localcluster.myredis.RedisClusterUnitSuite
 import org.junit.Test
 import org.scalatest.{Matchers, _}
 import sext._

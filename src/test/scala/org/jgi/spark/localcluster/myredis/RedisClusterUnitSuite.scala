@@ -1,21 +1,14 @@
-package org.jgi.spark.localcluster
+package org.jgi.spark.localcluster.myredis
 
-import java.io.{File, FilenameFilter}
-import java.util
-import java.util.{List, UUID}
-
-import com.holdenkarau.spark.testing.{SharedJavaSparkContext, SharedSparkContext}
+import com.holdenkarau.spark.testing.SharedSparkContext
 import org.apache.spark.SparkConf
-import org.junit.BeforeClass
-import org.scalatest.junit.JUnitSuite
-import redis.clients.jedis.{HostAndPort, JedisCluster}
-import org.junit.After
-import org.junit.AfterClass
+import org.junit.{After, AfterClass, BeforeClass}
 import org.scalatest.FunSpec
-import redis.embedded.{Redis, RedisServer}
-import redis.embedded.cluster.{RedisCluster, RedisClusterModifier}
+import org.scalatest.junit.JUnitSuite
+import redis.embedded.cluster.RedisClusterModifier
+import redis.embedded.util.OS
+import redis.embedded.{RedisExecProvider, RedisServer}
 
-import collection.JavaConversions._
 import scala.language.implicitConversions
 
 
@@ -73,9 +66,6 @@ object RedisClusterUnitSuite extends JUnitSuite {
     if (redis_home == null) throw new RuntimeException("REDIS_HOME is not set")
     System.setProperty("REDIS_HOME", redis_home)
 
-
-    import redis.embedded.RedisExecProvider
-    import redis.embedded.util.OS
     val provider = RedisExecProvider.build().`override`(OS.UNIX, redis_home + "/src/redis-server")
 
 

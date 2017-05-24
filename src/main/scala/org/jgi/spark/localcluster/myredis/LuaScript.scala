@@ -1,11 +1,9 @@
-package org.jgi.spark.localcluster
+package org.jgi.spark.localcluster.myredis
 
 import java.io.InputStream
 
 import com.typesafe.scalalogging.LazyLogging
 import redis.clients.jedis.Jedis
-
-import scala.io.Source
 
 /**
   * Created by Lizhen Shi on 5/23/17.

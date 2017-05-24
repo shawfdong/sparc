@@ -1,7 +1,7 @@
-package org.jgi.spark.localcluster
+package org.jgi.spark.localcluster.myredis
 
-import redis.clients.jedis.{JedisCluster}
-import collection.JavaConversions._
+import redis.clients.jedis.JedisCluster
+import scala.collection.JavaConversions._
 
 /**
   * Created by Lizhen Shi on 5/21/17.

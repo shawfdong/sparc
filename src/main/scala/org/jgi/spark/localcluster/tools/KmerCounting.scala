@@ -8,6 +8,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
+import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
 import sext._
 
 

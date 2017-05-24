@@ -1,4 +1,4 @@
-package org.jgi.spark.localcluster
+package org.jgi.spark.localcluster.myredis
 
 /**
   * Created by Lizhen Shi on 5/23/17.

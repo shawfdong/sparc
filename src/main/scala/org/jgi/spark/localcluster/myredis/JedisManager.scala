@@ -1,14 +1,11 @@
-package org.jgi.spark.localcluster
-
-import java.util
+package org.jgi.spark.localcluster.myredis
 
 import com.typesafe.scalalogging.LazyLogging
-import redis.clients.jedis._
+import org.jgi.spark.localcluster.DNASeq
+import redis.clients.jedis.{Jedis, JedisPool, JedisPoolConfig}
 import redis.clients.util.SafeEncoder
 
-import collection.JavaConverters._
-import collection.mutable._
-import scala.collection.mutable
+import scala.collection.mutable._
 import scala.util.Random
 
 /**
