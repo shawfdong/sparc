@@ -29,7 +29,7 @@ class TestJedisCluster extends RedisClusterUnitSuite with Matchers {
 
   @Test
   def test_lua_script(): Unit ={
-    val jedis = jedisMgr.getJedis_by_hash(0)
+    val jedis = jedisMgr.getJedis(jedisMgr.getSlot(0))
     val name ="/scripts/lua/" + "cas_hincr.lua"
     val script=LuaScript.get_script(name)
     println(script)

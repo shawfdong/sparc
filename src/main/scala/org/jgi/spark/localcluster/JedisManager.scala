@@ -17,7 +17,8 @@ import scala.util.Random
 class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) extends LazyLogging {
 
   val _hostsAndPorts = hostsAndPortsSet.toArray
-  val hostsAndPortsSlots = _hostsAndPorts.sorted.map(x => 0.until(n_slot_per_ins).map(_ => x)).flatten
+  val redisSlots = _hostsAndPorts.sorted.map(x => 0.until(n_slot_per_ins).map(_ => x))
+    .flatten.zipWithIndex.map { case ((ip, port), idx) => RedisSlot(ip, port, idx) }
 
   def this(ip: String, port: Int) = {
 
@@ -35,30 +36,35 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   val rand = new Random(System.currentTimeMillis())
 
-  private def get_pool(keyHash: Int): Option[JedisPool] = {
-    val n = keyHash % hostsAndPortsSlots.length
-    get_pool(hostsAndPortsSlots(n))
+  private def get_pool(slot: RedisSlot): Option[JedisPool] = {
+    get_pool(slot.ip, slot.port)
   }
 
-  private def get_pool(ipAndPort: (String, Int)): Option[JedisPool] = {
+  private def get_pool(ip: String, port: Int): Option[JedisPool] = {
+    val ipAndPort = (ip, port)
     if (!jedis_pool_ins_map.contains(ipAndPort)) {
-      val (ip, port) = ipAndPort
 
-      val  poolConfig = new JedisPoolConfig()
+      val poolConfig = new JedisPoolConfig()
       poolConfig.setMaxTotal(256); // maximum active connections
       jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port))
     }
     jedis_pool_ins_map.get(ipAndPort)
   }
 
-  def getJedis(ip:String,port : Int): Jedis = {
-    get_pool((ip,port)) match {
+  def getJedis(ip: String, port: Int): Jedis = {
+    get_pool(ip, port) match {
       case Some(pool) => pool.getResource
       case None => throw new Exception("never be here")
     }
   }
-  def getJedis_by_hash(keyHash: Int): Jedis = {
-    get_pool(keyHash) match {
+
+  def getSlot(keyHash: Int): RedisSlot = {
+    redisSlots(keyHash % redisSlots.length)
+  }
+
+
+  def getJedis(slot: RedisSlot): Jedis = {
+    get_pool(slot) match {
       case Some(pool) => pool.getResource
       case None => throw new Exception("never be here")
     }
@@ -67,7 +73,8 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
   def flushAll(): Unit = {
     _hostsAndPorts.indices.foreach {
       i =>
-        val jedis = getJedis_by_hash(i)
+        val slot=getSlot(i)
+        val jedis = getJedis(slot)
         if (!jedis.info.contains("role:slave")) {
           val ip = _hostsAndPorts(i)._1
           val port = _hostsAndPorts(i)._2
@@ -86,7 +93,8 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def set(k: String, v: String, hash_fun: String => Int = null): Unit = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val jedis = getJedis_by_hash(hashVal)
+    val slot=getSlot(hashVal)
+    val jedis = getJedis(slot)
 
     try {
       jedis.set(k, v)
@@ -104,7 +112,9 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
         (hash_fun(a), a, b)
     }.groupBy(_._1).foreach {
       case (hashVal, grouped) =>
-        val jedis = getJedis_by_hash(hashVal)
+        val slot=getSlot(hashVal)
+        val jedis = getJedis(slot)
+
         val p = jedis.pipelined()
         try {
           grouped.foreach {
@@ -119,7 +129,8 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def incr(k: String, hash_fun: String => Int = null): Unit = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val jedis = getJedis_by_hash(hashVal)
+    val slot=getSlot(hashVal)
+    val jedis = getJedis(slot)
 
     try {
       jedis.incr(k)
@@ -130,30 +141,29 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def incr(seq: DNASeq): Unit = {
     val hashVal = seq.hashCode()
-    val slot = hashVal % n_slot_per_ins
-    val jedis = getJedis_by_hash(hashVal)
+    val slot=getSlot(hashVal)
+    val jedis = getJedis(slot)
 
     try
-      jedis.hincrBy(SafeEncoder.encode(slot.toString), seq.bytes, 1)
+      jedis.hincrBy(SafeEncoder.encode(slot.key("hkc")), seq.bytes, 1)
     finally {
       jedis.close()
     }
   }
 
-  def server_size ={
-    this._hostsAndPorts.length
-  }
+
+
   def incr_batch(keys: collection.Iterable[DNASeq]): Unit = {
-    keys.map(x => (x, 1)).groupBy(_._1).map { x => (x._1.hashCode % server_size , x._1, x._2.map(_._2).sum) }
+    keys.map { x => (x .hashCode % redisSlots.length, x) }
       .groupBy(_._1).foreach {
       case (hashVal, grouped) =>
-        var slot=hashVal % n_slot_per_ins
-        val jedis = getJedis_by_hash(slot)
+        val slot=getSlot(hashVal)
+        val jedis = getJedis(slot)
         val p = jedis.pipelined()
         try {
           grouped.foreach {
-            case (_, k, v) =>
-              p.hincrBy(SafeEncoder.encode(slot.toString), k.bytes, v)
+            case (_, k) =>
+              p.hincrBy(SafeEncoder.encode(slot.key("hkc")), k.bytes, 1)
           }
           p.sync()
         } finally {
@@ -164,11 +174,10 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def get(s: DNASeq): String = {
     val hv = s.hashCode
-    val slot = hv % n_slot_per_ins
-    val jedis = getJedis_by_hash(hv)
-
+    val slot=getSlot(hv)
+    val jedis = getJedis(slot)
     try {
-      val bytes = jedis.hget(SafeEncoder.encode(slot.toString), s.bytes)
+      val bytes = jedis.hget(SafeEncoder.encode(slot.key("hkc")), s.bytes)
       if (bytes == null)
         null
       else
@@ -180,8 +189,8 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def get(k: String, hash_fun: String => Int = null): String = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val jedis = getJedis_by_hash(hashVal)
-
+    val slot=getSlot(hashVal)
+    val jedis = getJedis(slot)
     try {
       jedis.get(k)
     } finally {
@@ -204,6 +213,9 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
       close()
     }
   }))
+
+  logger.info("create Jedis manager with slots:\n" + redisSlots.map(_.toString).mkString("\n")
+  )
 
 }
 
