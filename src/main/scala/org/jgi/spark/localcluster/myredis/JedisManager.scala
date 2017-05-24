@@ -136,53 +136,6 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
     }
   }
 
-  def incr(seq: DNASeq): Unit = {
-    val hashVal = seq.hashCode()
-    val slot=getSlot(hashVal)
-    val jedis = getJedis(slot)
-
-    try
-      jedis.hincrBy(SafeEncoder.encode(slot.key("hkc")), seq.bytes, 1)
-    finally {
-      jedis.close()
-    }
-  }
-
-
-
-  def incr_batch(keys: collection.Iterable[DNASeq]): Unit = {
-    keys.map { x => (x .hashCode % redisSlots.length, x) }
-      .groupBy(_._1).foreach {
-      case (hashVal, grouped) =>
-        val slot=getSlot(hashVal)
-        val jedis = getJedis(slot)
-        val p = jedis.pipelined()
-        try {
-          grouped.foreach {
-            case (_, k) =>
-              p.hincrBy(SafeEncoder.encode(slot.key("hkc")), k.bytes, 1)
-          }
-          p.sync()
-        } finally {
-          jedis.close()
-        }
-    }
-  }
-
-  def get(s: DNASeq): String = {
-    val hv = s.hashCode
-    val slot=getSlot(hv)
-    val jedis = getJedis(slot)
-    try {
-      val bytes = jedis.hget(SafeEncoder.encode(slot.key("hkc")), s.bytes)
-      if (bytes == null)
-        null
-      else
-        SafeEncoder.encode(bytes)
-    } finally {
-      jedis.close()
-    }
-  }
 
   def get(k: String, hash_fun: String => Int = null): String = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
