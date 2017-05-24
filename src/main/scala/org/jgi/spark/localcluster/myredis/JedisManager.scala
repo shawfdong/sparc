@@ -77,11 +77,10 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
   def flushAll(): Unit = {
     _hostsAndPorts.indices.foreach {
       i =>
-        val slot = getSlot(i)
-        val jedis = getJedis(slot)
+        val ip = _hostsAndPorts(i)._1
+        val port = _hostsAndPorts(i)._2
+        val jedis = getJedis(ip,port )
         if (!jedis.info.contains("role:slave")) {
-          val ip = _hostsAndPorts(i)._1
-          val port = _hostsAndPorts(i)._2
           var code = jedis.flushAll()
           logger.debug(s"flush node $ip, $port, response $code")
 
@@ -191,6 +190,7 @@ object JedisManagerSingleton extends LazyLogging {
     _instance
   }
 
+  def instance: JedisManager = _instance
 
   def instance(redisSlots: Array[RedisSlot]): JedisManager = {
     if (_instance == null) {

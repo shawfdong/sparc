@@ -1,18 +1,17 @@
 package org.jgi.spark.localcluster.tools
 
-import com.holdenkarau.spark.testing.SharedSparkContext
 import org.jgi.spark.localcluster.myredis.RedisClusterUnitSuite
 import org.junit.Test
-import org.scalatest.{Matchers, _}
+import org.scalatest.Matchers
 import sext._
 
 /**
   * Created by Lizhen Shi on 5/22/17.
   */
 class RedisKmerCountingSpec extends RedisClusterUnitSuite with Matchers {
+  val REDIS_NODES = "127.0.0.1:42000,127.0.0.1:42001,127.0.0.1:42002"
   private val master = "local[4]"
   private val appName = "RedisKmerCountingSpec"
-  val REDIS_NODES = "127.0.0.1:42000,127.0.0.1:42001,127.0.0.1:42002"
 
   @Test
   def parseCommand(): Unit = {
