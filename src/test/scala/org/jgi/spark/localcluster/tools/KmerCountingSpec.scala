@@ -17,10 +17,6 @@ class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
 
   private val master = "local[4]"
   private val appName = "KmerCountingSpec"
-  //private val checkpointDir = Files.createTempDirectory(appName).toString
-
-  //private var spark: SparkSession = _
-
 
   "parse command line" should "be good" in {
     val cfg = KmerCounting.parse_command_line("-i test -p *.seq -o tmp".split(" ")).get

@@ -127,7 +127,7 @@ object KmerCounting extends LazyLogging {
   }
 
   def getJedisManager(config: Config): JedisManager = {
-    JedisManagerSingleton.instance(config.redis_ip_ports)
+    JedisManagerSingleton.instance(config.redis_ip_ports,config.n_redis_slot)
   }
 
   def flushAll(config: Config): Unit = {
@@ -159,8 +159,9 @@ object KmerCounting extends LazyLogging {
           buf.clear()
         }
     }
+    val cluster = getJedisManager(config)
     import org.jgi.spark.localcluster.rdd._
-    sc.kmerCountFromRedis(config.redis_ip_ports, config.n_redis_slot)
+    sc.kmerCountFromRedis(cluster.redisSlots)
   }
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {

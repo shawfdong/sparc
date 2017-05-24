@@ -31,7 +31,7 @@ class RedisKmerCountingSpec extends RedisClusterUnitSuite with Matchers {
   @Test
   def kmer_counting_should_work_on_the_test_seq_files {
 
-    val cfg = KmerCounting.parse_command_line(s"-i test/small -p sample.seq -o tmp/redis_kmercounting_seq_test.txt --n_iteration 1 --sample_fraction 0.8 --redis $REDIS_NODES".split(" ")).get
+    val cfg = KmerCounting.parse_command_line(s"-i test/small -p sample.seq -o tmp/redis_kmercounting_seq_test.txt --n_iteration 1 --redis $REDIS_NODES".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
     KmerCounting.run(cfg, sc)
   }

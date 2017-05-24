@@ -11,11 +11,18 @@ import scala.util.Random
 /**
   * Created by Lizhen Shi on 5/21/17.
   */
-class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) extends LazyLogging {
+//class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) extends LazyLogging {
+class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
 
-  val _hostsAndPorts = hostsAndPortsSet.toArray
-  val redisSlots = _hostsAndPorts.sorted.map(x => 0.until(n_slot_per_ins).map(_ => x))
-    .flatten.zipWithIndex.map { case ((ip, port), idx) => RedisSlot(ip, port, idx) }
+  val _hostsAndPorts = redisSlots.map(x => (x.ip, x.port)).distinct
+
+  def this(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) = {
+    this {
+      hostsAndPortsSet.toArray.sorted.map(x => 0.until(n_slot_per_ins).map(_ => x))
+        .flatten.zipWithIndex.map { case ((ip, port), idx) => RedisSlot(ip, port, idx) }
+    }
+  }
+
 
   def this(ip: String, port: Int) = {
 
@@ -70,7 +77,7 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
   def flushAll(): Unit = {
     _hostsAndPorts.indices.foreach {
       i =>
-        val slot=getSlot(i)
+        val slot = getSlot(i)
         val jedis = getJedis(slot)
         if (!jedis.info.contains("role:slave")) {
           val ip = _hostsAndPorts(i)._1
@@ -90,7 +97,7 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def set(k: String, v: String, hash_fun: String => Int = null): Unit = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val slot=getSlot(hashVal)
+    val slot = getSlot(hashVal)
     val jedis = getJedis(slot)
 
     try {
@@ -109,7 +116,7 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
         (hash_fun(a), a, b)
     }.groupBy(_._1).foreach {
       case (hashVal, grouped) =>
-        val slot=getSlot(hashVal)
+        val slot = getSlot(hashVal)
         val jedis = getJedis(slot)
 
         val p = jedis.pipelined()
@@ -126,7 +133,7 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def incr(k: String, hash_fun: String => Int = null): Unit = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val slot=getSlot(hashVal)
+    val slot = getSlot(hashVal)
     val jedis = getJedis(slot)
 
     try {
@@ -139,7 +146,7 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 
   def get(k: String, hash_fun: String => Int = null): String = {
     val hashVal = if (hash_fun == null) k.hashCode() else hash_fun(k)
-    val slot=getSlot(hashVal)
+    val slot = getSlot(hashVal)
     val jedis = getJedis(slot)
     try {
       jedis.get(k)
@@ -170,24 +177,28 @@ class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_
 }
 
 object JedisManagerSingleton extends LazyLogging {
-  @transient private var _instance: JedisManager = null
-  private var _hostsAndPorts: Array[(String, Int)] = null
 
-  def instance(hostsAndPorts: Array[(String, Int)]): JedisManager = {
+  @transient private var _instance: JedisManager = null
+
+  def instance(redis_ip_ports: Array[(String, Int)], n_redis_slot: Int): JedisManager = {
+    if (_instance == null) {
+
+      _instance = new JedisManager(redis_ip_ports.toSet, n_redis_slot)
+      logger.info("create singlton instance for the first time.")
+      logger.info(_instance.redisSlots.map(x => x.toString).mkString("\n"))
+
+    }
+    _instance
+  }
+
+
+  def instance(redisSlots: Array[RedisSlot]): JedisManager = {
     if (_instance == null) {
       logger.info("create singlton instance for the first time.")
-      logger.info(hostsAndPorts.map(x => x._1 + ":" + x._2.toString).mkString(" "))
+      logger.info(redisSlots.map(x => x.toString).mkString("\n"))
 
-      _instance = new JedisManager(hostsAndPorts.toSet)
-    } else if (!hostsAndPorts.sameElements(_hostsAndPorts)) {
-
-      logger.info("re-create singlton instance for a different set of hosts and ports")
-      logger.info(hostsAndPorts.map(x => x._1 + ":" + x._2.toString).mkString(" "))
-
-      _instance.close()
-      _instance = new JedisManager(hostsAndPorts.toSet)
+      _instance = new JedisManager(redisSlots)
     }
-    _hostsAndPorts = hostsAndPorts
     _instance
   }
 }
