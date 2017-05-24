@@ -148,7 +148,7 @@ object KmerCounting extends LazyLogging {
               s =>
                 buf.append(s)
                 if (buf.length > THRESH_HOLD) {
-                  cluster.incr_batch(buf)
+                  cluster.bf_incr_batch(buf)
                   buf.clear()
                 }
             }

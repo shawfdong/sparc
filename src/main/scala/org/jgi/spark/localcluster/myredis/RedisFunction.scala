@@ -61,7 +61,7 @@ class RedisFunction(@transient val mgr: JedisManager) {
       case (hashVal, grouped) =>
         val slot = mgr.getSlot(hashVal)
         val jedis = mgr.getJedis(slot)
-        val bfkey = slot.key(Constant.KMER_COUNTING_REDIS_BLOOMFILTER_HASH_KEY)
+        val bfkey =SafeEncoder.encode( slot.key(Constant.KMER_COUNTING_REDIS_BLOOMFILTER_HASH_KEY))
         val slotkey = SafeEncoder.encode(slot.key(Constant.KMER_COUNTING_REDIS_HASH_KEY))
         var params = collection.mutable.ListBuffer(bf_size, fp_rate, SafeEncoder.encode(slotkey))
         val sha = SafeEncoder.encode(LuaScript.get_sha(LuaScript.CAS_HINCR, jedis, slot.id))
@@ -70,7 +70,7 @@ class RedisFunction(@transient val mgr: JedisManager) {
         try {
           grouped.foreach {
             case (_, k) =>
-              client.evalsha(sha, toByteArray(0), bf_size, fp_rate, slotkey, k.bytes)
+              client.evalsha(sha, toByteArray(0), bfkey, bf_size, fp_rate, slotkey, k.bytes) //ensure 7 parameters
           }
           client.getAll()
           p.sync()
