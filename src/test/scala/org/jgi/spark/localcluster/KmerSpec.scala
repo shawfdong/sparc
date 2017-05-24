@@ -19,11 +19,11 @@ class KmerSpec extends FlatSpec with Matchers {
     DNASeq.from_bases("ATCT") should be < DNASeq.from_bases("ATCTA")
   }
 
-  "Kmer generator" should "generate n-k+1 kmers" in {
+  "Kmer generator" should "generate 4 kmers since ATC is duplicate" in {
     val seq = "ATCGATC"
     val k = 3
     val kmers = Kmer.generate_kmer(seq, k)
-    kmers.length shouldEqual seq.length - k + 1
+    kmers.length shouldEqual 4
   }
 
 
