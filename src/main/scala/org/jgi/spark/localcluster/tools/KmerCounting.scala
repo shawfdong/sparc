@@ -20,8 +20,6 @@ object KmerCounting extends LazyLogging {
                     use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2,
                     use_bloom_filter: Boolean = false)
 
-  var jedisManager = None: Option[JedisManager]
-
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("KmerCounting") {
       head("kmer counting", Utils.VERSION)
@@ -156,7 +154,7 @@ object KmerCounting extends LazyLogging {
         }
         //remained
         if (buf.nonEmpty) {
-          cluster.incr_batch(buf)
+          incr_fun(buf)
           buf.clear()
         }
     }
