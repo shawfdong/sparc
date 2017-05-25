@@ -32,6 +32,7 @@ libraryDependencies ++= Seq(
   "org.apache.commons" % "commons-io" % "1.3.2",
 
   "redis.clients" % "jedis" % "2.7.2",
+  "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.9.0",
 
   "org.apache.spark" % "spark-core_2.11" % "2.0.1" % "provided",
   "org.apache.spark" % "spark-graphx_2.11" % "2.0.1" % "provided",

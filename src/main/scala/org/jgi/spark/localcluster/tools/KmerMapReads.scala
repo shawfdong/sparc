@@ -3,14 +3,11 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.nio.file.{Files, Paths}
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.{DNASeq, Kmer, Utils}
+import org.jgi.spark.localcluster._
 import sext._
 
 import scala.util.Random
@@ -95,15 +92,15 @@ object KmerMapReads extends LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: RDD[DNASeq], config: Config, sc: SparkContext) = {
-    val kmersB = sc.broadcast(kmers.collect.toSet)
-    logger.info("iteration %d, broadcaset %d kmers".format(i, kmersB.value.size))
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: BloomFilter[Array[Byte]], config: Config, sc: SparkContext) = {
+    val kmersB = sc.broadcast(kmers)
+    logger.info("iteration %d, broadcaset %d kmers".format(i, kmersB.value.length))
 
     val kmersRDD = readsRDD.mapPartitions {
       iterator =>
         iterator.map {
           case (id, seq) =>
-            Kmer.generate_kmer(seq = seq, k = config.k).filter(!kmersB.value.contains(_))
+            Kmer.generate_kmer(seq = seq, k = config.k).filter(x => kmersB.value.contains(x.bytes))
               .filter(x => Utils.pos_mod(x.hashCode, config.n_iteration) == 0).distinct.map(s => (s, Set(id)))
         }
     }.flatMap(x => x).reduceByKey(_ ++ _)
@@ -178,14 +175,22 @@ object KmerMapReads extends LazyLogging {
     readsRDD.cache()
 
     val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
-    kmers.cache()
-    println("loaded %d kmers".format(kmers.count))
+    val n_kmers = kmers.count.toInt
+    println("loaded %d kmers".format(n_kmers))
     kmers.take(5).foreach(println)
-
+    val kmer_bloomfilter: BloomFilter[Array[Byte]] = {
+      //val bf = new BloomFilterBytes(n_kmers, 0.01)
+      val bf = new CuckooFilterBytes(n_kmers, 0.01)
+      kmers.collect.foreach {
+        s =>
+          bf.add(s.bytes)
+      }
+      bf
+    }
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, readsRDD, kmers, config, sc)
+        process_iteration(i, readsRDD, kmer_bloomfilter, config, sc)
     }
 
     KmerCounting.delete_hdfs_file(config.output)
@@ -196,7 +201,6 @@ object KmerMapReads extends LazyLogging {
 
     //clean up
     rdds.foreach(_.unpersist())
-    kmers.unpersist()
     readsRDD.unpersist()
 
     val totalTime1 = System.currentTimeMillis
