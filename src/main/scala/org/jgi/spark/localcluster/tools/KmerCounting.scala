@@ -37,7 +37,7 @@ object KmerCounting extends LazyLogging {
         c.copy(output = x)).text("output of the top k-mers")
 
       opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
-        var t = x.split(",").map {
+        val t = x.split(",").map {
           u =>
             if (Utils.parseIpPort(u)._2 < 1) 1 else 0
         }.sum
@@ -46,7 +46,7 @@ object KmerCounting extends LazyLogging {
         else
           success
       }.action { (x, c) =>
-        val r = x.split(",").map(Utils.parseIpPort(_))
+        val r = x.split(",").map(Utils.parseIpPort)
         c.copy(redis_ip_ports = r, use_redis = true)
       }.text("ip:port for redis servers. Only IP supported.")
 

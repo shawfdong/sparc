@@ -3,6 +3,8 @@ package org.jgi.spark.localcluster.rdd
 import org.apache.spark.SparkContext
 import org.jgi.spark.localcluster.myredis.RedisSlot
 
+import scala.language.implicitConversions
+
 /**
   * Created by Lizhen Shi on 5/23/17.
   */

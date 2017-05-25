@@ -8,7 +8,7 @@ import org.jgi.spark.localcluster.myredis.RedisSlot
   */
 
 class RedisPartition(val index: Int, val ip: String, port: Int, slot_idx: Int) extends Partition {
-  val slot = new RedisSlot(ip, port, slot_idx)
+  val slot = RedisSlot(ip, port, slot_idx)
 
   def key(k: String) = slot.key(k)
 }

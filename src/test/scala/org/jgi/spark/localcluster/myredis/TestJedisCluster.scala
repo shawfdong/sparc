@@ -20,7 +20,7 @@ class TestJedisCluster extends RedisClusterUnitSuite with Matchers {
     jedisMgr.get("a") shouldEqual "1"
     jedisMgr.get("b") shouldEqual "2"
     jedisMgr.get("non exists") should be (null)
-    jedisMgr.incr_batch(List("CCG","ATG","TAG","ATG").map(DNASeq.from_bases(_)))
+    jedisMgr.incr_batch(List("CCG","ATG","TAG","ATG").map(DNASeq.from_bases))
     jedisMgr.get(DNASeq.from_bases("ATG")) shouldEqual "2"
     jedisMgr.get(DNASeq.from_bases("ATGAAAAAAAAA")) shouldEqual  (null)
   }

@@ -6,6 +6,7 @@ import redis.clients.jedis.{Client, Pipeline, Transaction}
 import redis.clients.util.SafeEncoder
 
 import scala.collection.JavaConversions._
+import scala.language.implicitConversions
 
 /**
   * Created by Lizhen Shi on 5/24/17.

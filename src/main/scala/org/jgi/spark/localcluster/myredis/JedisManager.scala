@@ -158,7 +158,7 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
   @transient val jedis_pool_ins_map: HashMap[(String, Int), JedisPool] = new HashMap[(String, Int), JedisPool]()
 
   def close(): Unit = {
-    if (jedis_pool_ins_map.size > 0) {
+    if (jedis_pool_ins_map.nonEmpty) {
       logger.info("JedisManager: jvm exiting, destroying jedis pool")
       jedis_pool_ins_map.values.foreach(_.destroy())
     }
