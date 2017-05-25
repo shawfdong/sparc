@@ -16,8 +16,9 @@ object KmerCounting extends LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0, sample_fraction: Double = -1.0,
-                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2)
+                    scratch_dir: String = "/tmp", n_partition: Int = 0,
+                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2,
+                    use_bloom_filter: Boolean = false)
 
   var jedisManager = None: Option[JedisManager]
 
@@ -58,7 +59,7 @@ object KmerCounting extends LazyLogging {
 
       opt[Int]("n_redis_slot").
         validate(x =>
-          if (x>0) success else failure("should be positve")
+          if (x > 0) success else failure("should be positve")
         ).action((x, c) =>
         c.copy(n_redis_slot = x))
         .text("hash key slots for one redis instance")
@@ -71,6 +72,10 @@ object KmerCounting extends LazyLogging {
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+
+      opt[Unit]("use_bloom_filter").action((x, c) =>
+        c.copy(use_bloom_filter = true))
+        .text("use bloomer filter")
 
 
       opt[Int]('k', "kmer_length").action((x, c) =>
@@ -94,13 +99,6 @@ object KmerCounting extends LazyLogging {
           if (x > 0 && x <= 1) success
           else failure("contamination should be positive and less than 1"))
         .text("the fraction of top k-mers to keep, others are removed likely due to contamination")
-
-      opt[Double]("sample_fraction").action((x, c) =>
-        c.copy(sample_fraction = x)).
-        validate(x =>
-          if (x < 1) success
-          else failure("should be less than 1"))
-        .text("the fraction of reads to sample. if it is less than or equal to 0, no sample")
 
       opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
         c.copy(scratch_dir = x)).text("where the intermediate results are")
@@ -127,7 +125,7 @@ object KmerCounting extends LazyLogging {
   }
 
   def getJedisManager(config: Config): JedisManager = {
-    JedisManagerSingleton.instance(config.redis_ip_ports,config.n_redis_slot)
+    JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
   }
 
   def flushAll(config: Config): Unit = {
@@ -141,6 +139,9 @@ object KmerCounting extends LazyLogging {
       iterator =>
         val buf = scala.collection.mutable.ArrayBuffer.empty[DNASeq]
         val cluster = getJedisManager(config)
+
+        def incr_fun(u: collection.Iterable[DNASeq]) = if (config.use_bloom_filter) cluster.bf_incr_batch(u) else cluster.incr_batch(u)
+
         iterator.foreach {
           line =>
             Kmer.generate_kmer(seq = line, k = config.k)
@@ -148,7 +149,7 @@ object KmerCounting extends LazyLogging {
               s =>
                 buf.append(s)
                 if (buf.length > THRESH_HOLD) {
-                  cluster.incr_batch(buf)
+                  incr_fun(buf)
                   buf.clear()
                 }
             }
@@ -161,7 +162,11 @@ object KmerCounting extends LazyLogging {
     }
     val cluster = getJedisManager(config)
     import org.jgi.spark.localcluster.rdd._
-    sc.kmerCountFromRedis(cluster.redisSlots)
+    if (config.use_bloom_filter)
+      sc.kmerCountFromRedisWithBloomFilter(cluster.redisSlots)
+    else
+      sc.kmerCountFromRedis(cluster.redisSlots)
+
   }
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
@@ -169,17 +174,10 @@ object KmerCounting extends LazyLogging {
       process_iteration_redis(i, readsRDD, config, sc)
     else
       process_iteration_spark(i, readsRDD, config)
-    val kmer_count = smallKmersRDD.count
-
-    val topN = (kmer_count * contamination(config) * math.min(1.5, config.n_iteration)).toInt
-    logger.info(s"Iteration $i , number of kmers: $kmer_count, take top $topN")
-
-    val topKmers = smallKmersRDD.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
-
-    val rdd = sc.parallelize(topKmers)
+    val rdd = smallKmersRDD.filter(_._2 > 1)
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    val kmer_count = rdd.count
     (rdd, kmer_count)
-
   }
 
   private def process_iteration_spark(i: Int, readsRDD: RDD[String], config: Config): RDD[(DNASeq, Int)] = {
@@ -201,7 +199,7 @@ object KmerCounting extends LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, config.sample_fraction, sc).map(_._2)
+    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
 
     smallReadsRDD.cache()
     if (config.use_redis) flushAll(config)
@@ -214,23 +212,35 @@ object KmerCounting extends LazyLogging {
 
     if (true) {
       //hdfs
-      val rdds = values.map(_._1)
+      val rdds = values.map(_._1) //WARNING make sure the rdds in the list are exclusive for kmers
       KmerCounting.delete_hdfs_file(config.output)
-      val rdd = sc.union(rdds).reduceByKey(_ + _)
-      val kmer_count = values.map(_._2).sum
-      val topN = (kmer_count * contamination(config)).toInt
-      val filteredKmer = rdd.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
-      val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
-      filteredKmerRDD.saveAsTextFile(config.output)
-      logger.info(s"total #records=${filteredKmerRDD.count}/${kmer_count}/${topN} save results to hdfs ${config.output}")
+      if (false) { //take tops
+        val rdd = sc.union(rdds)
+        val kmer_count = values.map(_._2).sum
+        val topN = (kmer_count * contamination(config)).toInt
+        val filteredKmer = rdd.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
+        val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
+        filteredKmerRDD.saveAsTextFile(config.output)
+        logger.info(s"total #records=${filteredKmerRDD.count}/${kmer_count}/${topN} save results to hdfs ${config.output}")
+
+      } else { //exclude top kmers and 1 kmers
+        val rdd = sc.union(rdds)
+        val kmer_count = values.map(_._2).sum //all distinct kmer count (include len 1 kmern and top kmers
+        val topN =  (kmer_count * contamination(config)).toInt
+        val takeN=rdd.count.toInt -topN
+        val filteredKmer = rdd.filter(x => x._2 > 1).takeOrdered(takeN)(Ordering[Int].on { x => x._2 })
+
+        val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
+        filteredKmerRDD.saveAsTextFile(config.output)
+        logger.info(s"total #kmer/topN=${kmer_count}/${topN} save results to hdfs ${config.output}")
+      }
 
       //cleanup
       smallReadsRDD.unpersist()
       rdds.foreach(_.unpersist())
+      val totalTime1 = System.currentTimeMillis
+      logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
     }
-
-    val totalTime1 = System.currentTimeMillis
-    logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
   }
 
 

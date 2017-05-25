@@ -5,6 +5,7 @@ package org.jgi.spark.localcluster
   */
 object Constant {
   val KMER_COUNTING_REDIS_BLOOMFILTER_HASH_KEY: _root_.scala.Predef.String = "bfhkc"
+  val KMER_COUNTING_REDIS_BLOOMFILTER_COUNT_HASH_KEY: _root_.scala.Predef.String = "bfhkc:count"
 
   val KMER_COUNTING_REDIS_HASH_KEY:  String = "hkc"
 

@@ -13,6 +13,10 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
     new RedisKmerCountRDD(sc,slots)
   }
 
+  def kmerCountFromRedisWithBloomFilter(slots:Array[RedisSlot]):
+  RedisKmerCountRDD = {
+    new RedisKmerBloomFilterCountRDD(sc,slots)
+  }
 }
 
 trait RedisFunctions {

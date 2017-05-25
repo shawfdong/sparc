@@ -12,7 +12,7 @@ local entries   = ARGV[2]
 local precision = ARGV[3]
 local slotkey      = ARGV[4]
 local hashkey      = ARGV[5]
-local hash      = redis.sha1hex(ARGV[5])
+local hash      =   redis.sha1hex(hashkey)
 local countkey  = ARGV[1] .. ':count'
 local count     = redis.call('GET', countkey)
 if not count then
@@ -54,13 +54,13 @@ if index > 1 then
   for n=1, index-1 do
     local key   = ARGV[1] .. ':' .. n
     local scale = math.pow(2, n - 1) * entries
-    
+
     -- 0.4804530139182 = ln(2)^2
     local bits = math.floor((scale * math.log(precision * math.pow(0.5, n))) / -0.4804530139182)
 
     -- 0.69314718055995 = ln(2)
     local k = math.floor(0.69314718055995 * bits / scale)
-    
+
     local found = true
     for i=1, k do
       if redis.call('GETBIT', key, b[i] % bits) == 0 then
@@ -70,7 +70,8 @@ if index > 1 then
     end
 
     if found then
-      return 1
+      local r =  redis.call('HINCRBY', slotkey, hashkey, 1)
+      return r
     end
   end
 end
@@ -88,11 +89,10 @@ end
 if found == 0 then
   -- INCR is a little bit faster than SET.
   redis.call('INCR', countkey)
+  return 0
+else
+  local r = redis.call('HINCRBY', slotkey, hashkey, 1)
+  return r
 end
 
-if found >0 then  
-  redis.call('HINCRBY', slotkey, hashkey, 1)
-end
-
-return found
 
