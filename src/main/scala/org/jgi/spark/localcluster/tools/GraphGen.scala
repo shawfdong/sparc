@@ -89,26 +89,26 @@ object GraphGen extends LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext) = {
+  private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
     val edges = kmer_reads.map(_.combinations(2).map(x => x.sorted).filter {
       case a =>
         Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
     }.map(x => (x(0), x(1)))).flatMap(x => x)
-    val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
-      .map(x => Array(x._1._1, x._1._2, x._2)).toList
 
-    if (true) { //rdd cache
-      val rdd = sc.parallelize(groupedEdges)
-      rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
-      rdd
-    }
+    val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
+      .map(x => (x._1._1.toInt, x._1._2.toInt, x._2.toInt)).toList
+
+    val rdd = sc.parallelize(groupedEdges)
+    rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    rdd
+
   }
 
   def getJedisManager(config: Config): JedisManager = {
     JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
   }
 
-  private def process_iteration_redis(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext) = {
+  private def process_iteration_redis(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
     val THRESH_HOLD = 1024 * 32
 
     kmer_reads.foreachPartition {
@@ -116,7 +116,8 @@ object GraphGen extends LazyLogging {
         val buf = scala.collection.mutable.ArrayBuffer.empty[SingleEdge]
         val cluster = getJedisManager(config)
 
-        def incr_fun(u: collection.Iterable[SingleEdge]) = if (config.use_bloom_filter) cluster.bf_incr_edge_batch(u) else cluster.incr_edge_batch(u)
+        def incr_fun(u: collection.Iterable[SingleEdge]) =
+          if (config.use_bloom_filter) cluster.bf_incr_edge_batch(u) else cluster.incr_edge_batch(u)
 
         iterator.foreach {
           lst =>
@@ -141,26 +142,26 @@ object GraphGen extends LazyLogging {
 
     val cluster = getJedisManager(config)
     import org.jgi.spark.localcluster.rdd._
-    if (config.use_bloom_filter)
+    val results = (if (config.use_bloom_filter)
       sc.edgeCountFromRedisWithBloomFilter(cluster.redisSlots)
     else
-      sc.edgeCountFromRedis(cluster.redisSlots)
-
+      sc.edgeCountFromRedis(cluster.redisSlots).filter(x => x._2 >= config.min_shared_kmers)
+      ).filter(x => x._2 >= config.min_shared_kmers).map(x => (x._1.src, x._1.dest, x._2))
+    results.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    logger.info(s"iteration $i, #records ${results.count}")
+    results
   }
 
-  private def process_iteration(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext) = {
-    val edges = kmer_reads.map(_.combinations(2).map(x => x.sorted).filter {
-      case a =>
-        Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
-    }.map(x => (x(0), x(1)))).flatMap(x => x)
-    val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
-      .map(x => Array(x._1._1, x._1._2, x._2)).toList
+  def flushAll(config: Config): Unit = {
+    val mgr = getJedisManager(config)
+    mgr.flushAll()
+  }
 
-    if (true) { //rdd cache
-      val rdd = sc.parallelize(groupedEdges)
-      rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
-      rdd
-    }
+  private def process_iteration(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
+    if (config.use_redis)
+      process_iteration_redis(i, kmer_reads, config, sc)
+    else
+      process_iteration_spark(i, kmer_reads, config, sc)
   }
 
 
@@ -184,18 +185,20 @@ object GraphGen extends LazyLogging {
     logger.info("loaded %d kmer-reads-mapping".format(kmer_reads.count))
     kmer_reads.take(5).map(_.mkString(",")).foreach(x => logger.info(x))
 
-
+    if (config.use_redis) flushAll(config)
     val values = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, kmer_reads, config, sc)
+        val r = process_iteration(i, kmer_reads, config, sc)
+        if (config.use_redis) flushAll(config)
+        r
     }
 
 
     if (true) {
       //hdfs
-      val rdds = values.map(_.asInstanceOf[RDD[Array[Long]]])
+      val rdds = values
       KmerCounting.delete_hdfs_file(config.output)
-      val rdd = sc.union(rdds).map(_.mkString(","))
+      val rdd = sc.union(rdds).map(x => s"${x._1},${x._2},${x._3}")
       rdd.saveAsTextFile(config.output)
       logger.info(s"total #records=${rdd.count} save results to hdfs ${config.output}")
 
@@ -206,7 +209,7 @@ object GraphGen extends LazyLogging {
 
 
     val totalTime1 = System.currentTimeMillis
-    logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+    logger.info("EdgeGen time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
   }
 
 

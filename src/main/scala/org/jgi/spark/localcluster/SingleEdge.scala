@@ -17,7 +17,7 @@ case class SingleEdge(src: Int, dest: Int) extends Serializable {
 
 object SingleEdge extends Serializable {
   def apply(s: String): SingleEdge = {
-    val a = s.split("_")
+    val a = s.split("-")
     SingleEdge(a(0).toInt, a(1).toInt)
   }
 
