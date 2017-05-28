@@ -12,7 +12,7 @@ import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
 import sext._
 
 
-object KmerCounting extends LazyLogging {
+object KmerCounting extends App with  LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
@@ -242,7 +242,7 @@ object KmerCounting extends LazyLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
 
     val options = parse_command_line(args)
 

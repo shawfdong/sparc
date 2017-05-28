@@ -12,7 +12,7 @@ import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
 
-object GraphCC extends LazyLogging {
+object GraphCC  extends App with  LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "",
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 10,sleep: Int = 0,
@@ -156,7 +156,7 @@ object GraphCC extends LazyLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
 
     val options = parse_command_line(args)
 

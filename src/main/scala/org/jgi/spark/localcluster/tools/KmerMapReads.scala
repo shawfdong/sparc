@@ -13,7 +13,7 @@ import sext._
 import scala.util.Random
 
 
-object KmerMapReads extends LazyLogging {
+object KmerMapReads extends App with  LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
@@ -208,7 +208,7 @@ object KmerMapReads extends LazyLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
 
     val options = parse_command_line(args)
 

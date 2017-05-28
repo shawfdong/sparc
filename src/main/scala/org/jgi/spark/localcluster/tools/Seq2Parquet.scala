@@ -1,6 +1,6 @@
 package org.jgi.spark.localcluster.tools
 
-import com.typesafe.scalalogging.{StrictLogging}
+import com.typesafe.scalalogging.{LazyLogging, StrictLogging}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SparkSession}
@@ -12,7 +12,7 @@ import sext._
   */
 
 
-object Seq2Parquet extends StrictLogging {
+object Seq2Parquet  extends App with  LazyLogging {
 
   case class Config(input: String = "", output: String = "", pattern: String = "", n_partition: Int = 0, coalesce: Boolean = false)
 
@@ -76,7 +76,7 @@ object Seq2Parquet extends StrictLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
     val options = parse_command_line(args)
 
     options match {

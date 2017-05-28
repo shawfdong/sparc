@@ -11,7 +11,7 @@ import sext._
   */
 
 
-object Seq2Base64 extends LazyLogging {
+object Seq2Base64  extends App with  LazyLogging {
 
   case class Config(input: String = "", output: String = "", pattern: String = "", n_partition: Int = 0, coalesce: Boolean = false)
 
@@ -81,7 +81,7 @@ object Seq2Base64 extends LazyLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
 
     val options = parse_command_line(args)
 

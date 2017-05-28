@@ -5,10 +5,9 @@ lazy val root = (project in file(".")).
     version := "0.1",
     scalaVersion := "2.11.8",
     test in assembly := {},
+    testOptions in Test := Seq(Tests.Filter(s => !s.contains("Redis"))),
+    mainClass in Compile := Some("org.jgi.spark.localcluster.tools.Main")
 
-    testOptions in Test := Seq(Tests.Filter(s => !s.contains("Jedis")))
-
-    //mainClass in Compile := Some("myPackage.MyMainObject")
   ).settings(
     assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
   ).settings(

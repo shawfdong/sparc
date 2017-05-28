@@ -11,7 +11,7 @@ import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
 import org.jgi.spark.localcluster.{DNASeq, SingleEdge, Utils}
 import sext._
 
-object GraphGen extends LazyLogging {
+object GraphGen  extends App with  LazyLogging {
 
   case class Config(kmer_reads: String = "", output: String = "",
                     n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2, sleep: Int = 0,
@@ -213,7 +213,7 @@ object GraphGen extends LazyLogging {
   }
 
 
-  def main(args: Array[String]) {
+  override def main(args: Array[String]) {
 
     val options = parse_command_line(args)
 
