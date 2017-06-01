@@ -92,7 +92,7 @@ object KmerMapReads extends App with  LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: BloomFilter[Array[Byte]], config: Config, sc: SparkContext) = {
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]], config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
     logger.info("iteration %d, broadcaset %d kmers".format(i, kmersB.value.length))
 
@@ -178,7 +178,7 @@ object KmerMapReads extends App with  LazyLogging {
     val n_kmers = kmers.count.toInt
     println("loaded %d kmers".format(n_kmers))
     kmers.take(5).foreach(println)
-    val kmer_bloomfilter: BloomFilter[Array[Byte]] = {
+    val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = {
       //val bf = new BloomFilterBytes(n_kmers, 0.01)
       val bf = new CuckooFilterBytes(n_kmers, 0.01)
       kmers.collect.foreach {

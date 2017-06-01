@@ -9,7 +9,7 @@ import bloomfilter.mutable.{BloomFilter => ScalaBloomFilter, CuckooFilter => Sca
   */
 
 @SerialVersionUID(789L)
-abstract class BloomFilter[T](val expectedElements: Int, val falsePositiveRate: Double) extends Serializable {
+abstract class AbstractBloomFilter[T](val expectedElements: Long, val falsePositiveRate: Double) extends Serializable {
 
   val id = UUID.randomUUID().toString
 
@@ -35,8 +35,8 @@ abstract class BloomFilter[T](val expectedElements: Int, val falsePositiveRate: 
 
 
 @SerialVersionUID(789L)
-class BloomFilterBytes(expectedElements: Int, falsePositiveRate: Double)
-  extends BloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
+class BloomFilterBytes(expectedElements: Long, falsePositiveRate: Double)
+  extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
   val underlying = ScalaBloomFilter[Array[Byte]](expectedElements, falsePositiveRate)
 
   def mightContain(o: Array[Byte]): Boolean = underlying.mightContain(o)
@@ -53,7 +53,7 @@ class BloomFilterBytes(expectedElements: Int, falsePositiveRate: Double)
 
 @SerialVersionUID(789L)
 class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
-  extends BloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
+  extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
   val underlying = ScalaCuckooFilter[Array[Byte]](expectedElements)
 
   def mightContain(o: Array[Byte]) = underlying.mightContain(o)
@@ -70,7 +70,7 @@ class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
 
 @SerialVersionUID(789L)
 class BloomFilterString(expectedElements: Int, falsePositiveRate: Double)
-  extends BloomFilter[String](expectedElements, falsePositiveRate) {
+  extends AbstractBloomFilter[String](expectedElements, falsePositiveRate) {
   val underlying = ScalaBloomFilter[String](expectedElements, falsePositiveRate)
 
   def mightContain(o: String): Boolean = underlying.mightContain(o)
@@ -85,7 +85,7 @@ class BloomFilterString(expectedElements: Int, falsePositiveRate: Double)
 
 @SerialVersionUID(789L)
 class CuckooFilterString(expectedElements: Int, falsePositiveRate: Double)
-  extends BloomFilter[String](expectedElements, falsePositiveRate) {
+  extends AbstractBloomFilter[String](expectedElements, falsePositiveRate) {
 
   val underlying = ScalaCuckooFilter[String](expectedElements)
 

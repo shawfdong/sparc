@@ -13,7 +13,13 @@ lazy val root = (project in file(".")).
   ).settings(
     fork in Test := true,
     parallelExecution in Test := false
-  )
+  ).enablePlugins(JmhPlugin)
+
+sourceDirectory in Jmh := (sourceDirectory in Test).value
+classDirectory in Jmh := (classDirectory in Test).value
+dependencyClasspath in Jmh := (dependencyClasspath in Test).value
+compile in Jmh <<= (compile in Jmh) dependsOn (compile in Test)
+run in Jmh <<= (run in Jmh) dependsOn (Keys.compile in Jmh)
 
 javaOptions ++= Seq("-Xms2G", "-Xmx8G", "-XX:+CMSClassUnloadingEnabled")
 javacOptions ++= Seq("-source", "1.7", "-target", "1.7")
@@ -47,7 +53,8 @@ libraryDependencies ++= Seq(
 
   "org.scalatest" % "scalatest_2.11" % "2.2.2" % "provided",
   "com.holdenkarau" % "spark-testing-base_2.11" % "2.0.1_0.6.0" % "provided",
-  "eu.monniot.redis" % "embedded-redis" % "1.2.2" % "provided"
+  "eu.monniot.redis" % "embedded-redis" % "1.2.2" % "provided",
+  "org.openjdk.jmh" % "jmh-core" % "1.19"  % "provided"
 
 )
 
