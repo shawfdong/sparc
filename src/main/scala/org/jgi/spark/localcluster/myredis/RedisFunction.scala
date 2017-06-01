@@ -103,7 +103,7 @@ class RedisFunction(@transient val mgr: JedisManager) {
                 }
             }
           }
-          p.sync()
+          //p.sync()
         } finally {
           jedis.close()
         }
@@ -171,7 +171,7 @@ class RedisFunction(@transient val mgr: JedisManager) {
           {
 
           }
-          p.sync()
+          //p.sync()
         } finally {
           jedis.close()
         }

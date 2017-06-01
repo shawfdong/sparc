@@ -50,7 +50,8 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
 
       val poolConfig = new JedisPoolConfig()
       poolConfig.setMaxTotal(256); // maximum active connections
-      jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port))
+	poolConfig.setMaxWaitMillis(30*1000);
+      jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port,30*1000))
     }
     jedis_pool_ins_map.get(ipAndPort)
   }
