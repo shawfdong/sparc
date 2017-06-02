@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package tutorial;
+package kvstore;
 
 option java_package = "org.jgi.spark.localcluster.kvstore";
 option java_outer_classname = "KVStoreProtos";

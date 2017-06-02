@@ -2,16 +2,25 @@ package org.jgi.spark.localcluster;
 
 import redis.clients.util.SafeEncoder;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static java.nio.file.FileVisitResult.CONTINUE;
+import static java.nio.file.FileVisitResult.TERMINATE;
 
 /**
  * Created by Lizhen Shi on 5/21/17.
@@ -84,4 +93,30 @@ public class JavaUtils {
 
         return requiredObj;
     }
+
+    public static void deleteFileOrFolder(final Path path) throws IOException {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>(){
+            @Override public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
+                    throws IOException {
+                Files.delete(file);
+                return CONTINUE;
+            }
+
+            @Override public FileVisitResult visitFileFailed(final Path file, final IOException e) {
+                return handleException(e);
+            }
+
+            private FileVisitResult handleException(final IOException e) {
+                e.printStackTrace(); // replace with more robust error handling
+                return TERMINATE;
+            }
+
+            @Override public FileVisitResult postVisitDirectory(final Path dir, final IOException e)
+                    throws IOException {
+                if(e!=null)return handleException(e);
+                Files.delete(dir);
+                return CONTINUE;
+            }
+        });
+    };
 }

@@ -38,8 +38,17 @@ libraryDependencies ++= Seq(
 
   "redis.clients" % "jedis" % "2.7.2",
   "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.9.0",
+  "com.google.protobuf" % "protobuf-java" % "3.3.0",
+   "org.lmdbjava" % "lmdbjava" % "0.0.5",
+   "io.grpc" % "grpc-netty" % "1.3.0",
+  "io.grpc" % "grpc-protobuf" % "1.3.0",
+  "io.grpc" % "grpc-stub" % "1.3.0",
+  "io.netty" % "netty-tcnative" % "2.0.1.Final",
+  "org.javassist" % "javassist" % "3.21.0-GA",
+  "com.trueaccord.scalapb" % "scalapb-runtime_2.11" % "0.6.0-pre4",
+  "com.trueaccord.scalapb" % "scalapb-runtime-grpc_2.11" % "0.6.0-pre4",
 
-  "org.apache.spark" % "spark-core_2.11" % "2.0.1" % "provided",
+ "org.apache.spark" % "spark-core_2.11" % "2.0.1" % "provided",
   "org.apache.spark" % "spark-graphx_2.11" % "2.0.1" % "provided",
   "org.apache.spark" % "spark-mllib_2.11" % "2.0.1" % "provided",
   "javax.servlet" % "servlet-api" % "2.5",
@@ -58,6 +67,9 @@ libraryDependencies ++= Seq(
 
 )
 
+PB.targets in Compile := Seq(
+  scalapb.gen(grpc = true, flatPackage = true) -> (sourceManaged in Compile).value
+)
 spIgnoreProvided := true
 
 assemblyMergeStrategy in assembly := {

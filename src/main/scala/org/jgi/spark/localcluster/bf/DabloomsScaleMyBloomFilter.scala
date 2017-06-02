@@ -3,7 +3,7 @@ package org.jgi.spark.localcluster.bf
 /**
   * Created by Lizhen Shi on 5/31/17.
   */
-class DabloomsScaleBloomFilter(expectedElements: Long, falsePositiveRate: Double) {//extends MyBloomFilter(expectedElements, falsePositiveRate) {
+class DabloomsScaleBloomFilter(expectedElements: Long, falsePositiveRate: Double)  extends MyBloomFilter(expectedElements, falsePositiveRate) {
   val filter = new com.github.jdablooms.ScaleBloomFilter(expectedElements, falsePositiveRate)
 
     def put(o: Array[Byte]): Unit = {
