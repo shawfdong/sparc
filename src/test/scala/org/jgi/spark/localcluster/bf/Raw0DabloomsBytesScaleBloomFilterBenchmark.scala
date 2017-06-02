@@ -15,7 +15,7 @@ class Raw0DabloomsBytesScaleBloomFilterBenchmark {
   private val falsePositiveRate = 0.01
   private val random = new Random()
   com.github.jdablooms.ScaleBloomFilter.load_native()
-  private val bf = cdablooms.new_scaling_bloom(itemsExpected,falsePositiveRate,"tmp/Raw0DabloomsBytesScaleBloomFilterBenchmark.bin");
+  private val bf = cdablooms.new_scaling_bloom(itemsExpected,falsePositiveRate,"tmp/Raw0DabloomsBytesScaleBloomFilterBenchmark.bin")
 
   var idx=0l
   @Param(Array("32"))

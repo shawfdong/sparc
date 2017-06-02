@@ -10,5 +10,5 @@ abstract  class MyBloomFilter(val expectedElements: Long, val falsePositiveRate:
   def mightContain(o:Array[Byte]):Boolean
   def size():Long
 
-  def close:Unit
+  def close():Unit
 }

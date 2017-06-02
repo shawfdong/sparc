@@ -22,7 +22,7 @@ class TestJedisCluster extends RedisClusterUnitSuite with Matchers {
     jedisMgr.get("non exists") should be (null)
     jedisMgr.incr_batch(List("CCG","ATG","TAG","ATG").map(DNASeq.from_bases))
     jedisMgr.get(DNASeq.from_bases("ATG")) shouldEqual "2"
-    jedisMgr.get(DNASeq.from_bases("ATGAAAAAAAAA")) shouldEqual  (null)
+    jedisMgr.get(DNASeq.from_bases("ATGAAAAAAAAA")) shouldEqual  null
   }
 
   @Test
@@ -31,7 +31,7 @@ class TestJedisCluster extends RedisClusterUnitSuite with Matchers {
     val name ="/scripts/lua/" + "cas_hincr.lua"
     val script=LuaScript.get_script(name)
     println(script)
-    script should not be (null)
+    script should not be null
     val sha = LuaScript.get_sha("cas_hincr",jedis, 0.toString)
   }
 

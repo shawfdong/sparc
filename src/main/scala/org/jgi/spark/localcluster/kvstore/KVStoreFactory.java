@@ -12,7 +12,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
      * PoolableObjectFactory custom impl.
      */
     class KVStoreFactory implements PooledObjectFactory<KVStoreClient> {
-        private final AtomicReference<HostAndPort> hostAndPort = new AtomicReference<HostAndPort>();
+        private final AtomicReference<HostAndPort> hostAndPort = new AtomicReference<>();
         private final int connectionTimeout;
         private final int soTimeout;
         private final String clientName;
@@ -82,7 +82,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
                 throw je;
             }
 
-            return new DefaultPooledObject<KVStoreClient>(kvstore);
+            return new DefaultPooledObject<>(kvstore);
 
         }
 

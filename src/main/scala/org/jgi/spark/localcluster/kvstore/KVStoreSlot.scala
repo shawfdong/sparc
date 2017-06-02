@@ -8,11 +8,11 @@ case class KVStoreSlot(ip: String, port: Int) {
     (ip, port)
   }
 
-  val instance_id = {
+  val instance_id: String = {
     s"${ip}:${port}"
   }
 
-  val id = {
+  val id: String = {
     s"${ip}:${port}"
   }
 

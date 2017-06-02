@@ -10,7 +10,7 @@ import redis.clients.jedis.Jedis
   */
 object LuaScript extends LazyLogging {
 
-  def get_script(resource_name: String) = {
+  def get_script(resource_name: String): String = {
     val stream: InputStream = getClass.getResourceAsStream(resource_name)
     scala.io.Source.fromInputStream(stream).getLines().mkString("\n")
 
@@ -21,7 +21,7 @@ object LuaScript extends LazyLogging {
   val CAS_HINCR = "cas_hincr"
   val scripts = Map(CAS_HINCR -> get_script("/scripts/lua/" + "cas_hincr.lua"))
 
-  def get_sha(script_name: String, jedis: Jedis, jedis_id: String) = {
+  def get_sha(script_name: String, jedis: Jedis, jedis_id: String): String = {
     if (!sha_dict.contains(jedis_id)) sha_dict.put(jedis_id, collection.mutable.HashMap.empty[String, String])
     val dict = sha_dict.getOrElse(jedis_id, null)
     if (!dict.contains(script_name)) {

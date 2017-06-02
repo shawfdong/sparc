@@ -13,7 +13,7 @@ import sext._
   */
 class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
 {
-  override  def conf = super.conf.set("spark.ui.enabled", "true")
+  override  def conf: SparkConf = super.conf.set("spark.ui.enabled", "true")
 
   private val master = "local[4]"
   private val appName = "KmerCountingSpec"

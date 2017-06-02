@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
   */
 object Main extends LazyLogging {
   val apps: List[App] = List(KmerCounting, KmerMapReads, GraphGen, GraphCC, GraphCC2, Seq2Base64, Seq2Parquet)
-  val names = apps.map(x => (x.getClass.getSimpleName.replace("$", ""), x)).toMap
+  val names: Map[String, App] = apps.map(x => (x.getClass.getSimpleName.replace("$", ""), x)).toMap
 
   def companion[T](implicit man: Manifest[T]): T =
     man.runtimeClass.getField("MODULE$").get(man.runtimeClass).asInstanceOf[T]

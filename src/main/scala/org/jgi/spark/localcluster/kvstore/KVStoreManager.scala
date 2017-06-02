@@ -10,7 +10,7 @@ import scala.util.Random
   */
 class KVStoreManager(val kvstoreSlots: Array[KVStoreSlot]) extends LazyLogging {
 
-  val _hostsAndPorts = kvstoreSlots.map(x => (x.ip, x.port)).distinct
+  private val _hostsAndPorts: Array[(String, Int)] = kvstoreSlots.map(x => (x.ip, x.port)).distinct
 
   def this(hostsAndPortsSet: collection.immutable.Set[(String, Int)]) = {
     this {
@@ -30,8 +30,8 @@ class KVStoreManager(val kvstoreSlots: Array[KVStoreSlot]) extends LazyLogging {
     if (!kvstore_pool_ins_map.contains(ipAndPort)) {
 
       val poolConfig = new KVStorePoolConfig()
-      poolConfig.setMaxTotal(256); // maximum active connections
-	    poolConfig.setMaxWaitMillis(30*1000);
+      poolConfig.setMaxTotal(256) // maximum active connections
+	    poolConfig.setMaxWaitMillis(30*1000)
       kvstore_pool_ins_map.put(ipAndPort, new KVStorePool(poolConfig, ip, port,30*1000))
     }
     kvstore_pool_ins_map.get(ipAndPort)

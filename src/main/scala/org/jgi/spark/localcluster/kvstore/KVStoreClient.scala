@@ -53,28 +53,28 @@ class KVStoreClient private(
     is_connected = false
   }
 
-  def isConnected(): Boolean = is_connected
+  def isConnected: Boolean = is_connected
 
   def isBroken: Boolean = is_broken
 
   //ask server to close connection
-  def quit() = {}
+  def quit(): Unit = {}
 
-  def connect() = {}
+  def connect(): Unit = {}
 
-  def close() = {
+  def close(): Unit = {
     if (dataSource != null) {
       if (isBroken) {
-        this.dataSource.returnBrokenResource(this);
+        this.dataSource.returnBrokenResource(this)
       } else {
-        this.dataSource.returnResource(this);
+        this.dataSource.returnResource(this)
       }
     } else {
       disconnect()
     }
   }
 
-  def clientSetname(name: String) = {
+  def clientSetname(name: String): Unit = {
     client_name = name
   }
 
@@ -87,7 +87,7 @@ class KVStoreClient private(
 
 
   /*                     business methods           */
-  def incr_kmer_in_batch(kmers: Array[DNASeq], useBloomFilter: Boolean) = {
+  def incr_kmer_in_batch(kmers: Array[DNASeq], useBloomFilter: Boolean): Unit = {
     val request = KmerBatchRequest(kmers = kmers.map(x => ByteString.copyFrom(x.bytes)), useBloomFilter = useBloomFilter)
     val response = blockingStub.incrKmerInBatch(request = request)
   }

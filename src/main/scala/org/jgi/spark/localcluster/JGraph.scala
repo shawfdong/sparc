@@ -9,13 +9,13 @@ import net.jligra.uintVector
 class JGraph(val edges: Iterable[(Long, Long)]) {
   net.jligra.Info.load_native()
 
-  var node_mapping = edges.map(x => Array(x._1, x._2)).flatten.toList.distinct.sorted.zipWithIndex.toMap
+  var node_mapping: Map[Long, Int] = edges.map(x => Array(x._1, x._2)).flatten.toList.distinct.sorted.zipWithIndex.toMap
   val n_nodes: Long = node_mapping.size
-  val _inverse_mapping = node_mapping.map(_.swap)
+  val _inverse_mapping: Map[Int, Long] = node_mapping.map(_.swap)
 
-  def invmap(i: Long) = _inverse_mapping(i.toInt)
+  def invmap(i: Long): Long = _inverse_mapping(i.toInt)
 
-  def cc ={
+  def cc: Seq[(Long, Long)] ={
     val coo_row = new uintVector()
     val coo_col = new uintVector()
     edges.foreach {

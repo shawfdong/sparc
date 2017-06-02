@@ -1,9 +1,7 @@
 package org.jgi.spark.localcluster.myredis
 
 import com.typesafe.scalalogging.LazyLogging
-import org.jgi.spark.localcluster.DNASeq
 import redis.clients.jedis.{Jedis, JedisPool, JedisPoolConfig}
-import redis.clients.util.SafeEncoder
 
 import scala.collection.mutable._
 import scala.util.Random
@@ -14,7 +12,7 @@ import scala.util.Random
 //class JedisManager(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) extends LazyLogging {
 class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
 
-  val _hostsAndPorts = redisSlots.map(x => (x.ip, x.port)).distinct
+  val _hostsAndPorts: Array[(String, Int)] = redisSlots.map(x => (x.ip, x.port)).distinct
 
   def this(hostsAndPortsSet: collection.immutable.Set[(String, Int)], n_slot_per_ins: Int = 2) = {
     this {
@@ -49,9 +47,9 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
     if (!jedis_pool_ins_map.contains(ipAndPort)) {
 
       val poolConfig = new JedisPoolConfig()
-      poolConfig.setMaxTotal(256); // maximum active connections
-	poolConfig.setMaxWaitMillis(30*1000);
-      jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port,30*1000))
+      poolConfig.setMaxTotal(256) // maximum active connections
+      poolConfig.setMaxWaitMillis(30 * 1000)
+      jedis_pool_ins_map.put(ipAndPort, new JedisPool(poolConfig, ip, port, 30 * 1000))
     }
     jedis_pool_ins_map.get(ipAndPort)
   }
@@ -80,7 +78,7 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
       i =>
         val ip = _hostsAndPorts(i)._1
         val port = _hostsAndPorts(i)._2
-        val jedis = getJedis(ip,port )
+        val jedis = getJedis(ip, port)
         if (!jedis.info.contains("role:slave")) {
           var code = jedis.flushAll()
           logger.debug(s"flush node $ip, $port, response $code")

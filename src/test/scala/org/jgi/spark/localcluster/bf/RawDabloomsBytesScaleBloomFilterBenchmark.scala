@@ -15,7 +15,7 @@ class RawDabloomsBytesScaleBloomFilterBenchmark {
   private val falsePositiveRate = 0.01
   private val random = new Random()
 
-  private val bf = new ScaleBloomFilter(itemsExpected,falsePositiveRate);
+  private val bf = new ScaleBloomFilter(itemsExpected,falsePositiveRate)
 
   @Param(Array("32"))
   var length: Int = _

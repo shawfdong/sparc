@@ -12,11 +12,11 @@ import scala.concurrent.Future
 class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) extends KVStoreGrpc.KVStore {
 
   private var bloomFilter: MyBloomFilter = null
-  protected val backend =
+  protected val backend: Backend =
     if ("lmdb".equals(backendName)) {
       new LMDBBackend()
     } else {
-      throw new IllegalAccessException("invalid backend name: " + backendName);
+      throw new IllegalAccessException("invalid backend name: " + backendName)
     }
 
   def this(backendName: String) = this(backendName, null)
@@ -55,7 +55,7 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
     Future.successful(FlushReply("OK"))
   }
 
-  def close() = {
+  def close(): Unit = {
     backend.delete()
     if (bloomFilter != null) bloomFilter.close
   }

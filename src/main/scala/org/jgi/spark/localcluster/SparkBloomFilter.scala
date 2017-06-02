@@ -11,7 +11,7 @@ import bloomfilter.mutable.{BloomFilter => ScalaBloomFilter, CuckooFilter => Sca
 @SerialVersionUID(789L)
 abstract class AbstractBloomFilter[T](val expectedElements: Long, val falsePositiveRate: Double) extends Serializable {
 
-  val id = UUID.randomUUID().toString
+  val id: String = UUID.randomUUID().toString
 
   var length = 0
 
@@ -37,7 +37,7 @@ abstract class AbstractBloomFilter[T](val expectedElements: Long, val falsePosit
 @SerialVersionUID(789L)
 class BloomFilterBytes(expectedElements: Long, falsePositiveRate: Double)
   extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
-  val underlying = ScalaBloomFilter[Array[Byte]](expectedElements, falsePositiveRate)
+  val underlying: ScalaBloomFilter[Array[Byte]] = ScalaBloomFilter[Array[Byte]](expectedElements, falsePositiveRate)
 
   def mightContain(o: Array[Byte]): Boolean = underlying.mightContain(o)
 
@@ -54,9 +54,9 @@ class BloomFilterBytes(expectedElements: Long, falsePositiveRate: Double)
 @SerialVersionUID(789L)
 class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
   extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
-  val underlying = ScalaCuckooFilter[Array[Byte]](expectedElements)
+  val underlying: ScalaCuckooFilter[Array[Byte]] = ScalaCuckooFilter[Array[Byte]](expectedElements)
 
-  def mightContain(o: Array[Byte]) = underlying.mightContain(o)
+  def mightContain(o: Array[Byte]): Boolean = underlying.mightContain(o)
 
   def _add(x: Array[Byte]): Unit = underlying.add(x)
 
@@ -71,7 +71,7 @@ class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
 @SerialVersionUID(789L)
 class BloomFilterString(expectedElements: Int, falsePositiveRate: Double)
   extends AbstractBloomFilter[String](expectedElements, falsePositiveRate) {
-  val underlying = ScalaBloomFilter[String](expectedElements, falsePositiveRate)
+  val underlying: ScalaBloomFilter[String] = ScalaBloomFilter[String](expectedElements, falsePositiveRate)
 
   def mightContain(o: String): Boolean = underlying.mightContain(o)
 
@@ -87,9 +87,9 @@ class BloomFilterString(expectedElements: Int, falsePositiveRate: Double)
 class CuckooFilterString(expectedElements: Int, falsePositiveRate: Double)
   extends AbstractBloomFilter[String](expectedElements, falsePositiveRate) {
 
-  val underlying = ScalaCuckooFilter[String](expectedElements)
+  val underlying: ScalaCuckooFilter[String] = ScalaCuckooFilter[String](expectedElements)
 
-  def mightContain(o: String) = underlying.mightContain(o)
+  def mightContain(o: String): Boolean = underlying.mightContain(o)
 
   def _add(x: String): Unit = underlying.add(x)
 

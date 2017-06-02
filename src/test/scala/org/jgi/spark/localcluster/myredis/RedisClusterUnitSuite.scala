@@ -1,7 +1,7 @@
 package org.jgi.spark.localcluster.myredis
 
 import com.holdenkarau.spark.testing.SharedSparkContext
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.{After, AfterClass, BeforeClass}
 import org.scalatest.FunSpec
 import org.scalatest.junit.JUnitSuite
@@ -17,9 +17,9 @@ import scala.language.implicitConversions
   */
 abstract class RedisClusterUnitSuite extends JUnitSuite  {
 
-  def sc = RedisClusterUnitSuite.auxClass.sc
+  def sc: SparkContext = RedisClusterUnitSuite.auxClass.sc
 
-  def jedisMgr = RedisClusterUnitSuite.jedisMgr
+  def jedisMgr: JedisManager = RedisClusterUnitSuite.jedisMgr
 
   @After
   def tearDown(): Unit = {
@@ -41,7 +41,7 @@ abstract class RedisClusterUnitSuite extends JUnitSuite  {
 
 
 object RedisClusterUnitSuite extends JUnitSuite {
-  val ports = Array(42000, 42001, 42002).map(i => i: java.lang.Integer)
+  val ports: Array[Integer] = Array(42000, 42001, 42002).map(i => i: java.lang.Integer)
 
   class AuxClass extends  FunSpec with    SharedSparkContext {
 

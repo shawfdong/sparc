@@ -33,12 +33,12 @@ public class KVStorePool extends Pool<KVStoreClient> {
                 int port = uri.getPort();
                 String password = URIHelper.getPassword(uri);
                 int database = URIHelper.getDBIndex(uri);
-                this.internalPool = new GenericObjectPool<KVStoreClient>(new KVStoreFactory(h, port,
-                        DEFAULT_TIMEOUT, DEFAULT_TIMEOUT , null),
+                this.internalPool = new GenericObjectPool<>(new KVStoreFactory(h, port,
+                        DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, null),
                         new GenericObjectPoolConfig());
             } else {
-                this.internalPool = new GenericObjectPool<KVStoreClient>(new KVStoreFactory(host,
-                        DEFAULT_PORT, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, null ), new GenericObjectPoolConfig());
+                this.internalPool = new GenericObjectPool<>(new KVStoreFactory(host,
+                        DEFAULT_PORT, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, null), new GenericObjectPoolConfig());
             }
         }
 

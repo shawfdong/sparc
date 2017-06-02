@@ -8,11 +8,11 @@ case class RedisSlot(ip: String, port: Int, slot: Int) {
     (ip, port)
   }
 
-  val instance_id = {
+  val instance_id: String = {
     s"${ip}:${port}"
   }
 
-  val id = {
+  val id: String = {
     s"${ip}:${port}:${slot}"
   }
 

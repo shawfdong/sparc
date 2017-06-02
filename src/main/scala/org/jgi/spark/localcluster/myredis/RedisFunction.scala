@@ -149,16 +149,16 @@ class RedisFunction(@transient val mgr: JedisManager) {
 
   //bloom filter
   def bf_incr_edge_batch(keys: collection.Iterable[SingleEdge]): Unit = {
-    val bf_size = (Constant.BLOOMFILTER_EXPECTED_NUM_ITEMS)
-    val fp_rate = (Constant.BLOOMFILTER_EXPECTED_POSITIVE_FALSE)
+    val bf_size = Constant.BLOOMFILTER_EXPECTED_NUM_ITEMS
+    val fp_rate = Constant.BLOOMFILTER_EXPECTED_POSITIVE_FALSE
     keys.map { x => (x.hashCode % mgr.redisSlots.length, x) }
       .groupBy(_._1).foreach {
       case (hashVal, grouped) =>
         val slot = mgr.getSlot(hashVal)
         val jedis = mgr.getJedis(slot)
-        val bfkey = (slot.key(Constant.EDGE_COUNTING_REDIS_BLOOMFILTER_HASH_KEY))
-        val slotkey = (slot.key(Constant.EDGE_COUNTING_REDIS_HASH_KEY))
-        val sha = (LuaScript.get_sha(LuaScript.CAS_HINCR, jedis, slot.instance_id))
+        val bfkey = slot.key(Constant.EDGE_COUNTING_REDIS_BLOOMFILTER_HASH_KEY)
+        val slotkey = slot.key(Constant.EDGE_COUNTING_REDIS_HASH_KEY)
+        val sha = LuaScript.get_sha(LuaScript.CAS_HINCR, jedis, slot.instance_id)
         val p = jedis.pipelined()
         val client = get_client(p, sha)
         try {

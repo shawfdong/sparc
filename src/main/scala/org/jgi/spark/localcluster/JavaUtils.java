@@ -85,9 +85,7 @@ public class JavaUtils {
             method = obj.getClass().getDeclaredMethod(methodName, classArray);
             method.setAccessible(true);
             requiredObj = method.invoke(obj, params);
-        } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
+        } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException | IllegalAccessException e) {
             e.printStackTrace();
         }
 
@@ -118,5 +116,5 @@ public class JavaUtils {
                 return CONTINUE;
             }
         });
-    };
+    }
 }

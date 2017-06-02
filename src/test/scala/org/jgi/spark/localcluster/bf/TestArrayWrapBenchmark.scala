@@ -48,6 +48,6 @@ class TestArrayWrapBenchmark {
 
 class ArrayWrap {
   val array = new util.HashSet[Array[Byte]]()
-  def put(a:Array[Byte])= array.add(a)
-  def mightContain(a:Array[Byte]) = array.contains(a)
+  def put(a:Array[Byte]): Boolean = array.add(a)
+  def mightContain(a:Array[Byte]): Boolean = array.contains(a)
 }

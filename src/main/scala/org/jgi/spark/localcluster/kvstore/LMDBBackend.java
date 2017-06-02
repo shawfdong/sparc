@@ -51,7 +51,7 @@ public class LMDBBackend extends Backend {
         this.db_folder = data_folder + "/lmbd_" + UUID.randomUUID().toString();
         File path = new File(db_folder);
         this.env = create()
-                .setMapSize(10 * 1024 * 1024 * 1024)
+                .setMapSize(10l * 1024l * 1024l * 1024l)
                 .setMaxDbs(1)
                 .open(path);
 
@@ -79,7 +79,7 @@ public class LMDBBackend extends Backend {
 
     @Override
     public List<KmerCount> getKmerCounts(boolean useBloomFilter, int minimumCount) {
-        ArrayList<KmerCount> list = new ArrayList<KmerCount>();
+        ArrayList<KmerCount> list = new ArrayList<>();
         try (Txn<ByteBuffer> txn = env.txnRead()) {
             try (CursorIterator<ByteBuffer> it = db.iterate(txn, FORWARD)) {
                 for (final KeyVal<ByteBuffer> kv : it.iterable()) {

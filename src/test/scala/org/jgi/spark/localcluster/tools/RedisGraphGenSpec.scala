@@ -15,13 +15,13 @@ class RedisGraphGenSpec extends RedisClusterUnitSuite with Matchers {
 
 
   @Test
-  def parse_command_line_should_be_good_in {
+  def parse_command_line_should_be_good_in() {
     val cfg = GraphGen.parse_command_line("-i test/kmermapping_test.txt -k 31 -o tmp".split(" ")).get
     cfg.kmer_reads should be("test/kmermapping_test.txt")
   }
 
   @Test
-  def graph_gen_should_work_on_the_test_seq_files_in {
+  def graph_gen_should_work_on_the_test_seq_files_in() {
     val cfg = GraphGen.parse_command_line(
       s"-i test/kmermapping_test.txt -k 31 -o tmp/redis_graph_gen_test.txt --n_iteration 1 --redis $REDIS_NODES".split(" ")
         .filter(_.nonEmpty)).get
@@ -31,7 +31,7 @@ class RedisGraphGenSpec extends RedisClusterUnitSuite with Matchers {
   }
 
   @Test
-  def graph_gen_should_work_on_the_test_seq_files_for_multiple_iterations_in {
+  def graph_gen_should_work_on_the_test_seq_files_for_multiple_iterations_in() {
     val cfg = GraphGen.parse_command_line(
       s"-i test/kmermapping_test.txt -k 31 -o tmp/redis_graph_gen_test_iter3.txt --n_iteration 3 --redis $REDIS_NODES".split(" ")
         .filter(_.nonEmpty)).get
@@ -41,7 +41,7 @@ class RedisGraphGenSpec extends RedisClusterUnitSuite with Matchers {
   }
 
   @Test
-  def graph_gen_should_work_on_the_test_seq_files_for_multiple_iterations_and_use_bloomfilter_in {
+  def graph_gen_should_work_on_the_test_seq_files_for_multiple_iterations_and_use_bloomfilter_in() {
     val cfg = GraphGen.parse_command_line(
       s"-i test/kmermapping_test.txt -k 31 -o tmp/redis_graph_gen_test_bf_iter3.txt --n_iteration 3 --use_bloom_filter --redis $REDIS_NODES".split(" ")
         .filter(_.nonEmpty)).get
