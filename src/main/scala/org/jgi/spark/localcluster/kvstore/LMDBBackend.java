@@ -78,15 +78,17 @@ public class LMDBBackend extends Backend {
     }
 
     @Override
-    public List<KmerCount> getKmerCounts() {
+    public List<KmerCount> getKmerCounts(boolean useBloomFilter, int minimumCount) {
         ArrayList<KmerCount> list = new ArrayList<KmerCount>();
         try (Txn<ByteBuffer> txn = env.txnRead()) {
             try (CursorIterator<ByteBuffer> it = db.iterate(txn, FORWARD)) {
                 for (final KeyVal<ByteBuffer> kv : it.iterable()) {
                     int count = kv.val().getInt();
-                    ByteString kmer = ByteString.copyFrom(kv.key());
-
-                    list.add( new KmerCount(kmer,count ));
+                    if (useBloomFilter) count += 1;
+                    if (count >= minimumCount) {
+                        ByteString kmer = ByteString.copyFrom(kv.key());
+                        list.add(new KmerCount(kmer, count));
+                    }
                 }
             }
         }

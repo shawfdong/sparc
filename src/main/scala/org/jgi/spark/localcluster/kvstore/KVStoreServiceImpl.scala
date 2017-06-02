@@ -1,12 +1,8 @@
 package org.jgi.spark.localcluster.kvstore
 
-import java.util
-import java.util.List
-
 import org.jgi.spark.localcluster.bf.{DabloomsScaleBloomFilter, MyBloomFilter, ScalaScaleBloomFilter}
 
 import scala.collection.JavaConversions._
-
 import scala.concurrent.Future
 
 
@@ -26,46 +22,43 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
   def this(backendName: String) = this(backendName, null)
 
 
-  override def incKmerInBatch(request: KmerBatchRequest): Future[StatusReply] = {
+  override def incrKmerInBatch(request: KmerBatchRequest): Future[Empty] = {
     val kmers = request.kmers
     val use_bloomfilter: Boolean = request.useBloomFilter
-    var reply:StatusReply = null
-    try {
-      val filteredKmers =
-        if (use_bloomfilter) {
-          val bf = this.getBloomFilter
-          kmers.filter(x => bf.mightContain(x.toByteArray))
-        } else
-          kmers
 
+    val filteredKmers =
       if (use_bloomfilter) {
-        backend.incr(filteredKmers)
-      } else {
-        backend.incr(filteredKmers)
-      }
-      reply = StatusReply(status = StatusReply.StatusType.Success)
-    }
-    catch {
-      case e: Exception =>
-        reply = StatusReply(status = StatusReply.StatusType.Failure, message = e.getMessage)
+        val bf = this.getBloomFilter
+        kmers.filter(x => bf.mightContain(x.toByteArray))
+      } else
+        kmers
 
-    }
+    backend.incr(filteredKmers)
+
+
+    Future.successful(Empty.defaultInstance)
+  }
+
+  override def getKmerCounts(request: KmerCountRequest): Future[KmerCountReply] = {
+
+    val array = backend.getKmerCounts(request.useBloomFilter,request.minimumCount)
+    val reply=KmerCountReply(batch = array)
     Future.successful(reply)
   }
 
-  override def getKmerCounts(request: NullRequest): Future[KmerCountReply] =  {
+  override def incrEdgeInBatch(request: EdgeBatchRequest): Future[Empty] = ???
 
-    val array = backend.getKmerCounts
-    val status =Some(StatusReply(status = StatusReply.StatusType.Success))
-    val reply = KmerCountReply(status= status ,batch=array)
-    Future.successful(reply)
+  override def getEdgeCounts(request: EdgeCountRequest): Future[EdgeCountReply] = ???
+
+  override def flush(request: Empty): Future[FlushReply] = {
+    close()
+    Future.successful(FlushReply("OK"))
   }
 
-  override def incEdgeInBatch(request: EdgeBatchRequest): Future[StatusReply] = ???
-
-  override def getEdgeCounts(request: NullRequest): Future[EdgeCountReply] = ???
-
-  override def flush(request: NullRequest): Future[StatusReply] = ???
+  def close() = {
+    backend.delete()
+    if (bloomFilter != null) bloomFilter.close
+  }
 
 
   @throws[java.lang.Exception]
@@ -82,4 +75,6 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
     else if ("dablooms" == bloomfilterName) new DabloomsScaleBloomFilter(expectedElements, falsePositiveRate)
     else throw new Exception("Unknow bloomfilter: " + bloomfilterName)
   }
+
+  override def ping(request: Empty): Future[PingReply] =  Future.successful(PingReply("PONG"))
 }

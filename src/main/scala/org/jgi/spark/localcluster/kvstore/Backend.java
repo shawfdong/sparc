@@ -10,7 +10,7 @@ import java.util.List;
 public abstract class Backend {
     public abstract void incr(List<ByteString> kmers);
 
-    public abstract List<KmerCount> getKmerCounts();
+    public abstract List<KmerCount> getKmerCounts(boolean useBloomFilter , int minimumCount);
 
     public abstract void close();
     public abstract void delete() ;

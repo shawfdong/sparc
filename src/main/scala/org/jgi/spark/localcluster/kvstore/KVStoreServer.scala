@@ -24,10 +24,11 @@ object KVStoreServer extends LazyLogging {
 class KVStoreServer(executionContext: ExecutionContext, val backend: String, val bloomfilterName: String) extends LazyLogging {
   self =>
   private[this] var server: Server = null
+  private  val service = new KVStoreServiceImpl(backend, bloomfilterName)
 
   private def start(): Unit = {
     server = ServerBuilder.forPort(KVStoreServer.port).
-      addService(KVStoreGrpc.bindService(new KVStoreServiceImpl(backend, bloomfilterName), executionContext)).build.start
+      addService(KVStoreGrpc.bindService(service, executionContext)).build.start
     logger.info("Server started, listening on " + KVStoreServer.port)
     sys.addShutdownHook {
       System.err.println("*** shutting down gRPC server since JVM is shutting down")
@@ -37,6 +38,7 @@ class KVStoreServer(executionContext: ExecutionContext, val backend: String, val
   }
 
   private def stop(): Unit = {
+    service.close()
     if (server != null) {
       server.shutdown()
     }
