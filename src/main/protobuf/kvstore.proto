@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package tutorial;
+
+option java_package = "org.jgi.spark.localcluster.kvstore";
+option java_outer_classname = "KVStoreProtos";
+option java_generic_services = true;
+
+
+service KVStore {
+    rpc inc_kmer_in_batch (KmerBatchRequest) returns (StatusReply) {
+    }
+    rpc get_kmer_counts (NullRequest) returns (KmerCountReply) {
+    }
+    rpc inc_edge_in_batch (EdgeBatchRequest) returns (StatusReply) {
+    }
+    rpc get_Edge_counts (NullRequest) returns (EdgeCountReply) {
+    }
+
+    rpc flush(NullRequest) returns (StatusReply){}
+
+}
+
+message NullRequest {
+
+}
+
+message StatusReply {
+    enum StatusType {
+        Success = 0;
+        Failure = 1;
+    }
+    StatusType status = 1;
+    string message = 2;
+}
+
+/******************* kmers **************************/
+message KmerBatchRequest {
+    repeated bytes kmers = 1;
+    bool use_bloom_filter = 2;
+}
+
+
+message KmerCount {
+    bytes kmer = 1;
+    int32 count = 2;
+}
+message KmerCountReply {
+    StatusReply status = 1;
+    repeated KmerCount batch = 2;
+}
+
+
+/******************* edges **************************/
+message ReadEdge {
+    int32 src = 1;
+    int32 dest = 2;
+}
+
+message EdgeBatchRequest {
+    repeated ReadEdge edges = 1;
+    bool use_bloom_filter = 2;
+}
+
+message EdgeCountReply {
+    StatusReply status = 1;
+    repeated ReadEdge batch = 2;
+}
