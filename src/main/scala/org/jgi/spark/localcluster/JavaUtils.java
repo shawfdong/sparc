@@ -2,6 +2,7 @@ package org.jgi.spark.localcluster;
 
 import redis.clients.util.SafeEncoder;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -116,5 +117,14 @@ public class JavaUtils {
                 return CONTINUE;
             }
         });
+    }
+
+    public static void create_folder_if_not_exists(String path){
+        File directory = new File(path);
+        if (! directory.exists()){
+            directory.mkdirs();
+            // If you require it to make the entire directory path including parents,
+            // use directory.mkdirs(); here instead.
+        }
     }
 }

@@ -13,7 +13,7 @@ object KVStoreServer extends LazyLogging {
   def main(args: Array[String]): Unit = {
     val backend: String = "lmdb"
     val bloomfilterName: String = "scala"
-    val server = new KVStoreServer(ExecutionContext.global, backend, bloomfilterName)
+    val server = new KVStoreServer(port, ExecutionContext.global, backend, bloomfilterName)
     server.start()
     server.blockUntilShutdown()
   }
@@ -21,13 +21,13 @@ object KVStoreServer extends LazyLogging {
   private val port = 50051
 }
 
-class KVStoreServer(executionContext: ExecutionContext, val backend: String, val bloomfilterName: String) extends LazyLogging {
+class KVStoreServer(port:Int, executionContext: ExecutionContext, val backend: String, val bloomfilterName: String) extends LazyLogging {
   self =>
   private[this] var server: Server = null
   private  val service = new KVStoreServiceImpl(backend, bloomfilterName)
 
-  private def start(): Unit = {
-    server = ServerBuilder.forPort(KVStoreServer.port).
+   def start(): Unit = {
+    server = ServerBuilder.forPort(port).
       addService(KVStoreGrpc.bindService(service, executionContext)).build.start
     logger.info("Server started, listening on " + KVStoreServer.port)
     sys.addShutdownHook {
@@ -37,14 +37,14 @@ class KVStoreServer(executionContext: ExecutionContext, val backend: String, val
     }
   }
 
-  private def stop(): Unit = {
+    def stop(): Unit = {
     service.close()
     if (server != null) {
       server.shutdown()
     }
   }
 
-  private def blockUntilShutdown(): Unit = {
+    def blockUntilShutdown(): Unit = {
     if (server != null) {
       server.awaitTermination()
     }

@@ -49,6 +49,8 @@ public class LMDBBackend extends Backend {
 
     private void newDB() {
         this.db_folder = data_folder + "/lmbd_" + UUID.randomUUID().toString();
+        System.out.println("lmdb: use path " + db_folder);
+        JavaUtils.create_folder_if_not_exists(db_folder);
         File path = new File(db_folder);
         this.env = create()
                 .setMapSize(10l * 1024l * 1024l * 1024l)
@@ -107,6 +109,7 @@ public class LMDBBackend extends Backend {
         close();
         try {
             JavaUtils.deleteFileOrFolder(Paths.get(db_folder));
+            System.out.println("lmdb: delete folder " + db_folder);
         } catch (IOException e) {
             e.printStackTrace();
         }
