@@ -131,6 +131,11 @@ object KmerCounting extends App with LazyLogging {
     mgr.flushAll()
   }
 
+  def kvstoreFlushAll(config: Config): Unit = {
+    val mgr = getKVStoreManager(config)
+    mgr.flushAll()
+  }
+
   private def process_iteration_kvstore(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
     val THRESH_HOLD = 1024 * 32
     readsRDD.foreachPartition {
@@ -237,10 +242,13 @@ object KmerCounting extends App with LazyLogging {
 
     smallReadsRDD.cache()
     if (config.use_redis) redisFlushAll(config)
+    if (config.user_kvstore) kvstoreFlushAll(config)
+
     val values = 0.until(config.n_iteration).map {
       i =>
         val t = process_iteration(i, smallReadsRDD, config, sc)
         if (config.use_redis) redisFlushAll(config)
+        if (config.user_kvstore) kvstoreFlushAll(config)
         t
     }
 

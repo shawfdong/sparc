@@ -13,7 +13,11 @@ import org.jgi.spark.localcluster.DNASeq
 object KVStoreClient extends LazyLogging {
 
   def apply(host: String, port: Int, connectionTimeout: Int, soTimeout: Int): KVStoreClient = {
-    val channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
+    val maxBytes = Integer.MAX_VALUE
+    val builder = ManagedChannelBuilder.forAddress(host, port)
+    builder.usePlaintext(true)
+    builder.maxInboundMessageSize(maxBytes)
+    val channel = builder.build
     val blockingStub = KVStoreGrpc.blockingStub(channel)
     new KVStoreClient(host, port, channel, blockingStub, connectionTimeout, soTimeout)
   }

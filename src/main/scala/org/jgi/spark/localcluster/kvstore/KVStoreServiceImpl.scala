@@ -29,7 +29,7 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
     val filteredKmers =
       if (use_bloomfilter) {
         val bf = this.getBloomFilter
-        kmers.filter(x => bf.mightContain(x.toByteArray))
+        kmers.filter(x => bf.mightContainIfNotThenPut(x.toByteArray))
       } else
         kmers
 
@@ -41,8 +41,8 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
 
   override def getKmerCounts(request: KmerCountRequest): Future[KmerCountReply] = {
 
-    val array = backend.getKmerCounts(request.useBloomFilter,request.minimumCount)
-    val reply=KmerCountReply(batch = array)
+    val array = backend.getKmerCounts(request.useBloomFilter, request.minimumCount)
+    val reply = KmerCountReply(batch = array)
     Future.successful(reply)
   }
 
@@ -55,14 +55,17 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
     Future.successful(FlushReply("OK"))
   }
 
-  def close(): Unit = {
+  def close(): Unit = this.synchronized {
     backend.delete()
-    if (bloomFilter != null) bloomFilter.close
+    if (bloomFilter != null) {
+      bloomFilter.close
+      bloomFilter = null
+    }
   }
 
 
   @throws[java.lang.Exception]
-  def getBloomFilter: MyBloomFilter = {
+  def getBloomFilter: MyBloomFilter = this.synchronized {
     if (bloomFilter == null) bloomFilter = createBloomFilter(bloomfilterName)
     bloomFilter
   }
@@ -76,5 +79,5 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
     else throw new Exception("Unknow bloomfilter: " + bloomfilterName)
   }
 
-  override def ping(request: Empty): Future[PingReply] =  Future.successful(PingReply("PONG"))
+  override def ping(request: Empty): Future[PingReply] = Future.successful(PingReply("PONG"))
 }

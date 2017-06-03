@@ -37,8 +37,8 @@ abstract class KVStoreClusterUnitSuite extends JUnitSuite {
 
 
 object KVStoreClusterUnitSuite extends JUnitSuite {
-  val ports: Array[Integer] = Array(42000, 42001, 42002).map(i => i: java.lang.Integer)
-
+  val ports: Array[Integer] = Array(45000, 45001, 45002).map(i => i: java.lang.Integer)
+  //val ports: Array[Integer] = Array(45000).map(i => i: java.lang.Integer)
   class AuxClass extends FunSpec with SharedSparkContext {
 
     override def conf: SparkConf = {

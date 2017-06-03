@@ -30,8 +30,8 @@ public class LMDBBackend extends Backend {
     private static final String DB_NAME = "LMDB";
     private String data_folder;
 
-    private Env<ByteBuffer> env;
-    private Dbi<ByteBuffer> db;
+    private Env<ByteBuffer> _env = null;
+    private Dbi<ByteBuffer> _db = null;
     private String db_folder;
 
     public LMDBBackend(String data_folder) {
@@ -39,41 +39,62 @@ public class LMDBBackend extends Backend {
         if (this.data_folder == null) {
             this.data_folder = System.getProperty("java.io.tmpdir");
         }
-        newDB();
     }
 
     public LMDBBackend() {
         this(null);
     }
 
-
-    private void newDB() {
-        this.db_folder = data_folder + "/lmbd_" + UUID.randomUUID().toString();
-        System.out.println("lmdb: use path " + db_folder);
-        JavaUtils.create_folder_if_not_exists(db_folder);
-        File path = new File(db_folder);
-        this.env = create()
-                .setMapSize(10l * 1024l * 1024l * 1024l)
-                .setMaxDbs(1)
-                .open(path);
-
-        // We need a Dbi for each DB. A Dbi roughly equates to a sorted map. The
-        // MDB_CREATE flag causes the DB to be created if it doesn't already exist.
-        this.db = env.openDbi(DB_NAME, MDB_CREATE);
+    public synchronized Env<ByteBuffer> getEnv() {
+        if (this._env == null) {
+            this.db_folder = data_folder + "/lmdb_" + UUID.randomUUID().toString();
+            System.out.println("lmdb: use path " + db_folder);
+            JavaUtils.create_folder_if_not_exists(db_folder);
+            File path = new File(db_folder);
+            long dbsize = 10l * 1024l * 1024l * 1024l;
+            this._env = create()
+                    .setMapSize(dbsize)
+                    .setMaxDbs(1)
+                    .open(path);
+        }
+        return this._env;
     }
+
+    public synchronized Dbi<ByteBuffer> getDb() {
+        if (this._db == null) {
+            Env<ByteBuffer> env = getEnv();
+            // We need a Dbi for each DB. A Dbi roughly equates to a sorted map. The
+            // MDB_CREATE flag causes the DB to be created if it doesn't already exist.
+            this._db = env.openDbi(DB_NAME, MDB_CREATE);
+        }
+        return this._db;
+    }
+
 
     @Override
     public void incr(List<ByteString> kmers) {
         // We want to store some data, so we will need a direct ByteBuffer.
         // Note that LMDB keys cannot exceed maxKeySize bytes (511 bytes by default).
         // Values can be larger.
+        Env<ByteBuffer> env = getEnv();
+        Dbi<ByteBuffer> db = getDb();
         final ByteBuffer key = allocateDirect(env.getMaxKeySize());
-        final ByteBuffer val = allocateDirect(4);
+        final ByteBuffer val = allocateDirect(128);
+
         try (Txn<ByteBuffer> txn = env.txnWrite()) {
             for (ByteString bs : kmers) {
-                key.put(bs.toByteArray());
-                int cnt = db.get(txn, key).getInt();
-                val.putInt(cnt + 1);
+                key.clear();
+                val.clear();
+
+                key.put(bs.toByteArray()).flip();
+
+                ByteBuffer bytes = db.get(txn, key);
+                int cnt = 0;
+                if (bytes != null) cnt = bytes.getInt();
+                val.putInt(cnt + 1).flip();
+
+                db.put(txn, key, val);
+
             }
             txn.commit();
         }
@@ -82,6 +103,8 @@ public class LMDBBackend extends Backend {
     @Override
     public List<KmerCount> getKmerCounts(boolean useBloomFilter, int minimumCount) {
         ArrayList<KmerCount> list = new ArrayList<>();
+        Env<ByteBuffer> env = getEnv();
+        Dbi<ByteBuffer> db = getDb();
         try (Txn<ByteBuffer> txn = env.txnRead()) {
             try (CursorIterator<ByteBuffer> it = db.iterate(txn, FORWARD)) {
                 for (final KeyVal<ByteBuffer> kv : it.iterable()) {
@@ -99,17 +122,30 @@ public class LMDBBackend extends Backend {
     }
 
     @Override
-    public void close() {
-        db.close();
-        env.close();
+    public synchronized void close() {
+        if (_db != null) {
+            _db.close();
+            _db = null;
+        }
+        if (_env != null) {
+            _env.close();
+            _env = null;
+        }
     }
 
     @Override
-    public void delete() {
+    public synchronized void delete() {
         close();
         try {
-            JavaUtils.deleteFileOrFolder(Paths.get(db_folder));
-            System.out.println("lmdb: delete folder " + db_folder);
+            if (db_folder != null) {
+                File path = new File(db_folder);
+                if (path.exists()) {
+                    JavaUtils.deleteFileOrFolder(Paths.get(db_folder));
+                    System.out.println("lmdb: delete folder " + db_folder);
+                } else {
+                    System.out.println("WARNING ********** lmdb: folder " + db_folder + " does not exist.");
+                }
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
