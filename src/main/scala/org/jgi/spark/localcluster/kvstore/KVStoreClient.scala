@@ -97,11 +97,21 @@ class KVStoreClient private(
     response.batch.map(x => (new DNASeq(x.kmer.toByteArray), x.count))
   }
 
-  def flush():String = {
+  def incr_edge_in_batch(edges: Array[(Int, Int)], useBloomFilter: Boolean): Unit = {
+    val request = EdgeBatchRequest(edges = edges.map(x => ReadEdge(x._1, x._2)), useBloomFilter = useBloomFilter)
+    val response = blockingStub.incrEdgeInBatch(request = request)
+  }
+
+  def get_edge_counts(useBloomFilter: Boolean, minimumCount: Int): Seq[(Int, Int, Int)] = {
+    val response = blockingStub.getEdgeCounts(EdgeCountRequest(useBloomFilter = useBloomFilter, minimumCount = minimumCount))
+    response.batch.map(x => (x.src, x.dest, x.count))
+  }
+
+  def flush(): String = {
     blockingStub.flush(Empty.defaultInstance).reply
   }
 
-  def flushAll():String = flush()
+  def flushAll(): String = flush()
 
   def ping(): String = {
     blockingStub.ping(Empty.defaultInstance).reply

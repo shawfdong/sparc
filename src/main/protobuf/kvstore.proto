@@ -17,21 +17,23 @@ service KVStore {
     rpc get_Edge_counts (EdgeCountRequest) returns (EdgeCountReply) {
     }
 
-    rpc flush(Empty) returns (FlushReply){}
+    rpc flush (Empty) returns (FlushReply) {
+    }
 
-    rpc Ping(Empty) returns (PingReply){}
+    rpc Ping (Empty) returns (PingReply) {
+    }
 
 
 }
 
-message Empty {}
+message Empty {
+}
 message PingReply {
-    string reply=1;
+    string reply = 1;
 }
 message FlushReply {
-    string reply=1;
+    string reply = 1;
 }
-
 
 /******************* kmers **************************/
 message KmerBatchRequest {
@@ -50,14 +52,19 @@ message KmerCountRequest {
 }
 
 message KmerCountReply {
-     repeated KmerCount batch = 1;
+    repeated KmerCount batch = 1;
 }
-
 
 /******************* edges **************************/
 message ReadEdge {
     int32 src = 1;
     int32 dest = 2;
+}
+
+message ReadEdgeCount {
+    int32 src = 1;
+    int32 dest = 2;
+    int32 count = 3;
 }
 
 message EdgeBatchRequest {
@@ -71,5 +78,5 @@ message EdgeCountRequest {
 }
 
 message EdgeCountReply {
-    repeated ReadEdge batch = 1;
+    repeated ReadEdgeCount batch = 1;
 }

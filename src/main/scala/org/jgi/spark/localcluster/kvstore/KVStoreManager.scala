@@ -96,7 +96,7 @@ class KVStoreManager(val kvstoreSlots: Array[KVStoreSlot]) extends LazyLogging {
 
 }
 
-object KVstoreManagerSingleton extends LazyLogging {
+object KVStoreManagerSingleton extends LazyLogging {
 
   @transient private var _instance: KVStoreManager = null
 

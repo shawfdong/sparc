@@ -8,16 +8,18 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
+import org.jgi.spark.localcluster.kvstore.{KVStoreManager, KVStoreManagerSingleton}
 import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
 import sext._
 
 
-object KmerCounting extends App with  LazyLogging {
+object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
-                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2,
+                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2, //redis config, to be removed
+                    user_kvstore: Boolean = false, kvstore_ip_ports: Array[(String, Int)] = null,
                     use_bloom_filter: Boolean = false)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -34,7 +36,7 @@ object KmerCounting extends App with  LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
 
-      opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
+      opt[String]("kvstore").valueName("<ip:port,ip:port,...>").validate { x =>
         val t = x.split(",").map {
           u =>
             if (Utils.parseIpPort(u)._2 < 1) 1 else 0
@@ -45,8 +47,8 @@ object KmerCounting extends App with  LazyLogging {
           success
       }.action { (x, c) =>
         val r = x.split(",").map(Utils.parseIpPort)
-        c.copy(redis_ip_ports = r, use_redis = true)
-      }.text("ip:port for redis servers. Only IP supported.")
+        c.copy(kvstore_ip_ports = r, user_kvstore = true)
+      }.text("ip:port for kvstore server. Only IP supported.")
 
       opt[String]("format").valueName("<format>").action((x, c) =>
         c.copy(format = x)).
@@ -54,13 +56,6 @@ object KmerCounting extends App with  LazyLogging {
           if (List("seq", "parquet", "base64").contains(x)) success
           else failure("only valid for seq, parquet or base64")
         ).text("input format (seq, parquet or base64)")
-
-      opt[Int]("n_redis_slot").
-        validate(x =>
-          if (x > 0) success else failure("should be positve")
-        ).action((x, c) =>
-        c.copy(n_redis_slot = x))
-        .text("hash key slots for one redis instance")
 
 
       opt[Int]('n', "n_partition").action((x, c) =>
@@ -126,9 +121,48 @@ object KmerCounting extends App with  LazyLogging {
     JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
   }
 
-  def flushAll(config: Config): Unit = {
+  def getKVStoreManager(config: Config): KVStoreManager = {
+    KVStoreManagerSingleton.instance(config.kvstore_ip_ports)
+  }
+
+
+  def redisFlushAll(config: Config): Unit = {
     val mgr = getJedisManager(config)
     mgr.flushAll()
+  }
+
+  private def process_iteration_kvstore(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
+    val THRESH_HOLD = 1024 * 32
+    readsRDD.foreachPartition {
+      iterator =>
+        val buf = scala.collection.mutable.ArrayBuffer.empty[DNASeq]
+        val cluster = getKVStoreManager(config)
+
+        def incr_fun(u: collection.Iterable[DNASeq]) = cluster.incr_batch(u, config.use_bloom_filter)
+
+        iterator.foreach {
+          line =>
+            Kmer.generate_kmer(seq = line, k = config.k)
+              .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
+              s =>
+                buf.append(s)
+                if (buf.length > THRESH_HOLD) {
+                  incr_fun(buf)
+                  buf.clear()
+                }
+            }
+        }
+        //remained
+        if (buf.nonEmpty) {
+          incr_fun(buf)
+          buf.clear()
+        }
+    }
+    val cluster = getKVStoreManager(config)
+    import org.jgi.spark.localcluster.rdd._
+    sc.kmerCountFromKVStore(cluster.kvstoreSlots, useBloomFilter = config.use_bloom_filter, minimumCount = 1)
+
+
   }
 
   private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
@@ -170,6 +204,8 @@ object KmerCounting extends App with  LazyLogging {
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
     val smallKmersRDD = if (config.use_redis)
       process_iteration_redis(i, readsRDD, config, sc)
+    else if (config.user_kvstore)
+      process_iteration_kvstore(i, readsRDD, config, sc)
     else
       process_iteration_spark(i, readsRDD, config)
     val rdd = smallKmersRDD.filter(_._2 > 1)
@@ -200,11 +236,11 @@ object KmerCounting extends App with  LazyLogging {
     val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
 
     smallReadsRDD.cache()
-    if (config.use_redis) flushAll(config)
+    if (config.use_redis) redisFlushAll(config)
     val values = 0.until(config.n_iteration).map {
       i =>
         val t = process_iteration(i, smallReadsRDD, config, sc)
-        if (config.use_redis) flushAll(config)
+        if (config.use_redis) redisFlushAll(config)
         t
     }
 
@@ -224,8 +260,8 @@ object KmerCounting extends App with  LazyLogging {
       } else { //exclude top kmers and 1 kmers
         val rdd = sc.union(rdds)
         val kmer_count = values.map(_._2).sum //all distinct kmer count (include len 1 kmern and top kmers
-        val topN =  (kmer_count * contamination(config)).toInt
-        val takeN=rdd.count.toInt -topN
+        val topN = (kmer_count * contamination(config)).toInt
+        val takeN = rdd.count.toInt - topN
         val filteredKmer = rdd.filter(x => x._2 > 1).takeOrdered(takeN)(Ordering[Int].on { x => x._2 })
 
         val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
