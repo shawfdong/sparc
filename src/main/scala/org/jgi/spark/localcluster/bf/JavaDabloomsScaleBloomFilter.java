@@ -55,14 +55,14 @@ class JavaDabloomsScaleBloomFilter {
             random.nextBytes(bytes);
             bf.put(bytes );
         }
-        System.out.println ( N/(-(t0 - System.currentTimeMillis()) / 1000.));
+        System.out.println ("JavaDabloomsScaleBloomFilter " + N/(-(t0 - System.currentTimeMillis()) / 1000.));
         ScaleBloomFilter bf2 = new ScaleBloomFilter(itemsExpected, falsePositiveRate);
         t0 = System.currentTimeMillis();
-        for (int i = 0; i < 1000 * 1000 * 10; i++) {
+        for (int i = 0; i < N; i++) {
             random.nextBytes(bytes);
             bf2.put(bytes );
         }
-        System.out.println ( N/(-(t0 - System.currentTimeMillis()) / 1000.));
+        System.out.println ("ScaleBloomFilter "+ N/(-(t0 - System.currentTimeMillis()) / 1000.));
 
     }
 

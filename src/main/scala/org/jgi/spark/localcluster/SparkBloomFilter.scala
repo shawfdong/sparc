@@ -3,6 +3,7 @@ package org.jgi.spark.localcluster
 import java.util.UUID
 
 import bloomfilter.mutable.{BloomFilter => ScalaBloomFilter, CuckooFilter => ScalaCuckooFilter}
+import com.google.common.hash.{BloomFilter, Funnels}
 
 /**
   * Created by Lizhen Shi on 5/25/17.
@@ -98,3 +99,14 @@ class CuckooFilterString(expectedElements: Int, falsePositiveRate: Double)
     super.finalize()
   }
 }
+
+  @SerialVersionUID(789L)
+  class GuavaBytesBloomFilter(expectedElements: Int, falsePositiveRate: Double)
+    extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
+    private val underlying = BloomFilter.create[Array[Byte]](Funnels.byteArrayFunnel(), expectedElements, falsePositiveRate)
+
+    override def mightContain(o: Array[Byte]): Boolean =  underlying.mightContain(o)
+
+    override def _add(x: Array[Byte]): Unit = underlying.put(x)
+  }
+

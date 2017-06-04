@@ -179,8 +179,9 @@ object KmerMapReads extends App with  LazyLogging {
     println("loaded %d kmers".format(n_kmers))
     kmers.take(5).foreach(println)
     val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = {
+      // boomfilter at https://github.com/alexandrnikitin/bloom-filter-scala seems has serization problem
       //val bf = new BloomFilterBytes(n_kmers, 0.01)
-      val bf = new CuckooFilterBytes(n_kmers, 0.01)
+      val bf = new GuavaBytesBloomFilter(n_kmers, 0.01)
       kmers.collect.foreach {
         s =>
           bf.add(s.bytes)
