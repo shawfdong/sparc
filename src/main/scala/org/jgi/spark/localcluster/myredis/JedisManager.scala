@@ -1,7 +1,7 @@
 package org.jgi.spark.localcluster.myredis
 
 import com.typesafe.scalalogging.LazyLogging
-import redis.clients.jedis.{Jedis, JedisPool, JedisPoolConfig}
+import redis.clients.jedis._
 
 import scala.collection.mutable._
 import scala.util.Random
@@ -80,13 +80,27 @@ class JedisManager(val redisSlots: Array[RedisSlot]) extends LazyLogging {
         val port = _hostsAndPorts(i)._2
         val jedis = getJedis(ip, port)
         if (!jedis.info.contains("role:slave")) {
-          var code = jedis.flushAll()
+          var code = jedis.bf_flush_all()
           logger.debug(s"flush node $ip, $port, response $code")
 
           if (!"OK".equals(code)) {
-            code = jedis.flushAll()
+            code = jedis.bf_flush_all()
             logger.debug(s"flush node $ip, $port, response $code")
           }
+        }
+        jedis.close()
+    }
+  }
+
+  def loadModule(soPath:String):Unit ={
+    _hostsAndPorts.indices.foreach {
+      i =>
+        val ip = _hostsAndPorts(i)._1
+        val port = _hostsAndPorts(i)._2
+        val jedis = getJedis(ip, port)
+        if (!jedis.info.contains("role:slave")) {
+          var code = jedis.load_module(soPath);
+          logger.info(s"Redis load module $soPath, response $code")
         }
         jedis.close()
     }

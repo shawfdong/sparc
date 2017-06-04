@@ -29,7 +29,8 @@ class RedisKmerCountRDD
 
   }
 
-  override def count(): Long = {
+  /*to be cleaned*/
+  private  def count_useless(): Long = {
     val counts = this.partitions.map {
       p =>
         val partition = p.asInstanceOf[RedisPartition]

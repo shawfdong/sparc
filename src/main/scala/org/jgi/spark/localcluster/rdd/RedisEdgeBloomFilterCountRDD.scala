@@ -12,7 +12,8 @@ class RedisEdgeBloomFilterCountRDD
 (sc: SparkContext, redisSlots: Array[RedisSlot])
   extends RedisEdgeCountRDD(sc, redisSlots) with LazyLogging {
 
-  override def count(): Long = {
+  /*to be cleaned*/
+  private def count_nouse(): Long = {
     val counts = this.partitions.map {
       p =>
         val partition = p.asInstanceOf[RedisPartition]

@@ -9,6 +9,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
 import org.jgi.spark.localcluster.{DNASeq, SingleEdge, Utils}
+import org.jgi.spark.localcluster.myredis._
 import sext._
 
 object GraphGen  extends App with  LazyLogging {

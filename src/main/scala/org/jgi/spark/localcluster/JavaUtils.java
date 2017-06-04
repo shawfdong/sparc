@@ -28,7 +28,7 @@ import static java.nio.file.FileVisitResult.TERMINATE;
  */
 public class JavaUtils {
 
-    public static  byte[][] getByteParams(String... params) {
+    public static byte[][] getByteParams(String... params) {
         byte[][] p = new byte[params.length][];
         for (int i = 0; i < params.length; i++)
             p[i] = SafeEncoder.encode(params[i]);
@@ -93,15 +93,67 @@ public class JavaUtils {
         return requiredObj;
     }
 
+    public static Method getInvokableMethod(Object obj, String methodName,
+                                            int paramCount, Class... params) {
+        Object requiredObj = null;
+        Object[] parameters = new Object[paramCount];
+        Class<?>[] classArray = new Class<?>[paramCount];
+        for (int i = 0; i < paramCount; i++) {
+            parameters[i] = params[i];
+            classArray[i] = params[i].getClass();
+        }
+
+        for (Method method : obj.getClass().getDeclaredMethods()) {
+            if (!method.getName().equals(methodName)) {
+                continue;
+            }
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            boolean matches = true;
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (!parameterTypes[i].isAssignableFrom(parameters[i]
+                        .getClass())) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        return null;
+    }
+
+
+    public static Object genericInvokMethod(Object obj, Method method,
+                                            int paramCount, Object... params) {
+        Object requiredObj = null;
+        Object[] parameters = new Object[paramCount];
+        Class<?>[] classArray = new Class<?>[paramCount];
+        for (int i = 0; i < paramCount; i++) {
+            parameters[i] = params[i];
+            classArray[i] = params[i].getClass();
+        }
+        try {
+            requiredObj = method.invoke(obj, params);
+        } catch (IllegalArgumentException | InvocationTargetException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
+
+        return requiredObj;
+    }
+
     public static void deleteFileOrFolder(final Path path) throws IOException {
-        Files.walkFileTree(path, new SimpleFileVisitor<Path>(){
-            @Override public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
                     throws IOException {
                 Files.delete(file);
                 return CONTINUE;
             }
 
-            @Override public FileVisitResult visitFileFailed(final Path file, final IOException e) {
+            @Override
+            public FileVisitResult visitFileFailed(final Path file, final IOException e) {
                 return handleException(e);
             }
 
@@ -110,18 +162,19 @@ public class JavaUtils {
                 return TERMINATE;
             }
 
-            @Override public FileVisitResult postVisitDirectory(final Path dir, final IOException e)
+            @Override
+            public FileVisitResult postVisitDirectory(final Path dir, final IOException e)
                     throws IOException {
-                if(e!=null)return handleException(e);
+                if (e != null) return handleException(e);
                 Files.delete(dir);
                 return CONTINUE;
             }
         });
     }
 
-    public static void create_folder_if_not_exists(String path){
+    public static void create_folder_if_not_exists(String path) {
         File directory = new File(path);
-        if (! directory.exists()){
+        if (!directory.exists()) {
             directory.mkdirs();
             // If you require it to make the entire directory path including parents,
             // use directory.mkdirs(); here instead.

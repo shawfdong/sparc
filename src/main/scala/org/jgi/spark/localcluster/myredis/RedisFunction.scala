@@ -1,31 +1,14 @@
 package org.jgi.spark.localcluster.myredis
 
-import org.jgi.spark.localcluster.{Constant, DNASeq, JavaUtils, SingleEdge}
-import redis.clients.jedis.Protocol.toByteArray
-import redis.clients.jedis.{Client, Pipeline, Transaction}
+import org.jgi.spark.localcluster.{Constant, DNASeq, SingleEdge}
 import redis.clients.util.SafeEncoder
 
-import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 
 /**
   * Created by Lizhen Shi on 5/24/17.
   */
 class RedisFunction(@transient val mgr: JedisManager) {
-  def get_client(p: Pipeline, key: Array[Byte]): Client = {
-    val ret = JavaUtils.genericInvokMethod(p, "getClient", 1, key)
-    ret.asInstanceOf[Client]
-  }
-
-  def get_client(p: Transaction, key: Array[Byte]): Client = {
-    val ret = JavaUtils.genericInvokMethod(p, "getClient", 1, key)
-    ret.asInstanceOf[Client]
-  }
-
-  def get_client(p: Pipeline, key: String): Client = {
-    val ret = JavaUtils.genericInvokMethod(p, "getClient", 1, key)
-    ret.asInstanceOf[Client]
-  }
 
 
   // ============================ Kmer counting ===================================
@@ -55,7 +38,7 @@ class RedisFunction(@transient val mgr: JedisManager) {
             case (_, k) =>
               p.hincrBy(slotkey, k.bytes, 1)
           }
-          p.sync()
+          val returns = p.sync()
         } finally {
           jedis.close()
         }
@@ -65,48 +48,23 @@ class RedisFunction(@transient val mgr: JedisManager) {
 
   //bloom filter
   def bf_incr_batch(keys: collection.Iterable[DNASeq]): Unit = {
-    val bf_size = SafeEncoder.encode(Constant.BLOOMFILTER_EXPECTED_NUM_ITEMS)
-    val fp_rate = SafeEncoder.encode(Constant.BLOOMFILTER_EXPECTED_POSITIVE_FALSE)
     keys.map { x => (x.hashCode % mgr.redisSlots.length, x) }
       .groupBy(_._1).foreach {
       case (hashVal, grouped) =>
         val slot = mgr.getSlot(hashVal)
         val jedis = mgr.getJedis(slot)
-        val bfkey = SafeEncoder.encode(slot.key(Constant.KMER_COUNTING_REDIS_BLOOMFILTER_HASH_KEY))
-        val slotkey = SafeEncoder.encode(slot.key(Constant.KMER_COUNTING_REDIS_HASH_KEY))
-        val sha = SafeEncoder.encode(LuaScript.get_sha(LuaScript.CAS_HINCR, jedis, slot.instance_id))
-        val p = jedis.pipelined()
-        val client = get_client(p, sha)
-        //        val p = jedis.multi()
-        //        val client = get_client(p, sha)
         try {
-          grouped.foreach {
+          val slotkey = SafeEncoder.encode(slot.key(Constant.KMER_COUNTING_REDIS_HASH_KEY))
+          val p = jedis.pipelined()
+           grouped.foreach {
             case (group_id, k) =>
-              client.evalsha(sha, toByteArray(0), bfkey, bf_size, fp_rate, slotkey, k.bytes) //ensure 7 parameters
-          }
-          val returns = client.getAll()
-          if (false) //debug
-          {
-            val ins = grouped.toArray
-            if (returns.length != ins.length) throw new Exception("#requests <> #responses")
-            ins.indices.map {
-              i =>
-                val a = ins(i)._2.to_base64
-                val x = "iIiIiIiIiIg="
-                //val x = "ERERERERERA="
-                if (a.equals(x)) {
-                  val hcount = {
-                    val aa = jedis.hget(slotkey, ins(i)._2.bytes)
-                    if (aa == null) aa else SafeEncoder.encode(aa)
-                  }
-                  println(s"AAAAAAAAA, send $x to $hashVal, ${slot.toString}, return  ${returns(i)} ${returns(i).getClass} , count $hcount ")
-                }
-            }
-          }
-          //p.sync()
+              p.bf_hincr(  slotkey, k.bytes)
+           }
+          val returns = p.sync()
         } finally {
           jedis.close()
         }
+
     }
   }
 
@@ -149,36 +107,29 @@ class RedisFunction(@transient val mgr: JedisManager) {
 
   //bloom filter
   def bf_incr_edge_batch(keys: collection.Iterable[SingleEdge]): Unit = {
-    val bf_size = Constant.BLOOMFILTER_EXPECTED_NUM_ITEMS
-    val fp_rate = Constant.BLOOMFILTER_EXPECTED_POSITIVE_FALSE
+
     keys.map { x => (x.hashCode % mgr.redisSlots.length, x) }
       .groupBy(_._1).foreach {
       case (hashVal, grouped) =>
         val slot = mgr.getSlot(hashVal)
         val jedis = mgr.getJedis(slot)
-        val bfkey = slot.key(Constant.EDGE_COUNTING_REDIS_BLOOMFILTER_HASH_KEY)
         val slotkey = slot.key(Constant.EDGE_COUNTING_REDIS_HASH_KEY)
-        val sha = LuaScript.get_sha(LuaScript.CAS_HINCR, jedis, slot.instance_id)
         val p = jedis.pipelined()
-        val client = get_client(p, sha)
-        try {
+         try {
           grouped.foreach {
             case (group_id, e) =>
-              client.evalsha(sha, 0, bfkey, bf_size, fp_rate, slotkey, e.toString) //ensure 7 parameters
+              p.bf_hincr( slotkey, e.toString)
           }
-          val returns = client.getAll()
-          if (false) //debug
+           if (false) //debug
           {
 
           }
-          //p.sync()
+          p.sync()
         } finally {
           jedis.close()
         }
     }
   }
-
-
 }
 
 trait RedisFunTrait {

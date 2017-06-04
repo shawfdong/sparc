@@ -23,19 +23,7 @@ abstract class RedisClusterUnitSuite extends JUnitSuite  {
 
   @After
   def tearDown(): Unit = {
-
     jedisMgr.flushAll()
-    if (false) {
-      jedisMgr.jedis_pool_ins_map.values
-       .  foreach {
-          pool  =>
-          val jedis = pool.getResource
-          if (!jedis.info.contains("role:slave"))
-            jedis.flushAll()
-          jedis.close()
-      }
-
-    }
   }
 }
 
@@ -80,6 +68,7 @@ object RedisClusterUnitSuite extends JUnitSuite {
     servers.foreach(_.start())
 
     jedisMgr = new JedisManager(ports.map(x => ("127.0.0.1", x.toInt)).toSet)
+    jedisMgr.loadModule(redis_home + "/src/modules/bloomfilter.so")
     auxClass.beforeAll()
 
   }

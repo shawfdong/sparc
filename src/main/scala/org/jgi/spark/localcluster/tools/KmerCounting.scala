@@ -50,6 +50,29 @@ object KmerCounting extends App with LazyLogging {
         c.copy(kvstore_ip_ports = r, user_kvstore = true)
       }.text("ip:port for kvstore server. Only IP supported.")
 
+
+      opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
+        val t = x.split(",").map {
+          u =>
+            if (Utils.parseIpPort(u)._2 < 1) 1 else 0
+        }.sum
+        if (t > 0)
+          failure("format is not correct")
+        else
+          success
+      }.action { (x, c) =>
+        val r = x.split(",").map(Utils.parseIpPort)
+        c.copy(redis_ip_ports = r, use_redis = true)
+      }.text("ip:port for redis servers. Only IP supported.")
+
+      opt[Int]("n_redis_slot").
+        validate(x =>
+          if (x > 0) success else failure("should be positve")
+        ).action((x, c) =>
+        c.copy(n_redis_slot = x))
+        .text("hash key slots for one redis instance")
+
+
       opt[String]("format").valueName("<format>").action((x, c) =>
         c.copy(format = x)).
         validate(x =>
@@ -293,7 +316,10 @@ object KmerCounting extends App with LazyLogging {
     options match {
       case Some(_) =>
         val config = options.get
-
+        if (config.user_kvstore && config.use_redis){
+          logger.error("cannot use both redis and kvstore")
+          sys.exit(-1)
+        }
         logger.info(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Counting")
         conf.registerKryoClasses(Array(classOf[DNASeq]))

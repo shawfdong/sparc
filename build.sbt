@@ -36,7 +36,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
   "org.apache.commons" % "commons-io" % "1.3.2",
 
-  "redis.clients" % "jedis" % "2.7.2",
+  //"redis.clients" % "jedis" % "2.7.2",
   "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.9.0",
   "com.google.protobuf" % "protobuf-java" % "3.3.0",
   "org.lmdbjava" % "lmdbjava" % "0.0.5",
