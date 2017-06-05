@@ -204,8 +204,12 @@ object GraphGen  extends App with  LazyLogging {
       logger.info(s"total #records=${rdd.count} save results to hdfs ${config.output}")
 
       //cleanup
+	try {
       kmer_reads.unpersist()
       rdds.foreach(_.unpersist())
+	}catch {
+	case  e:Exception => e.printStackTrace()
+	}
     }
 
 
@@ -224,7 +228,7 @@ object GraphGen  extends App with  LazyLogging {
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Graph Gen")
-        conf.registerKryoClasses(Array(classOf[DNASeq]))
+        //conf.registerKryoClasses(Array(classOf[DNASeq])) //don't know why kryo cannot find the class
 
         val sc = new SparkContext(conf)
         run(config, sc)
