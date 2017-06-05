@@ -2,6 +2,8 @@ package org.jgi.spark.localcluster.bf
 
 import java.util.Random
 
+import org.jgi.spark.localcluster.GuavaBytesBloomFilter
+
 /**
   * Created by Lizhen Shi on 5/31/17.
   */
@@ -92,8 +94,8 @@ object ScalaScaleBloomFilter {
     }
 
     var dt:Double  = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
-
     println(dt)
+
     val bf2 = bloomfilter.mutable.BloomFilter[Array[Byte]](itemsExpected, falsePositiveRate)
     t0 = System.currentTimeMillis
     0.until(N).foreach {
@@ -101,8 +103,19 @@ object ScalaScaleBloomFilter {
         random.nextBytes(bytes)
         bf2.add(bytes)
     }
-    dt = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
 
+    dt = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
     println(dt)
+
+    val bf3 = new  GuavaBytesBloomFilter(itemsExpected.toInt, falsePositiveRate)
+    t0 = System.currentTimeMillis
+    0.until(N).foreach {
+      _ =>
+        random.nextBytes(bytes)
+        bf3.add(bytes)
+    }
+    dt = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
+    println(dt)
+
   }
 }

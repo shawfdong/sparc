@@ -5,7 +5,6 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.{After, AfterClass, BeforeClass}
 import org.scalatest.FunSpec
 import org.scalatest.junit.JUnitSuite
-import redis.embedded.RedisServer
 
 import scala.language.implicitConversions
 
@@ -13,11 +12,13 @@ import scala.language.implicitConversions
 /**
   * Created by Lizhen Shi on 6/2/17.
   */
-abstract class KVStoreClusterUnitSuite extends JUnitSuite {
 
-  def sc: SparkContext = KVStoreClusterUnitSuite.auxClass.sc
 
-  def kvstoreMgr: KVStoreManager = KVStoreClusterUnitSuite.kvstoreMgr
+abstract class ROCKSDBStoreClusterUnitSuite extends JUnitSuite {
+
+  def sc: SparkContext = ROCKSDBStoreClusterUnitSuite.auxClass.sc
+
+  def kvstoreMgr: KVStoreManager = ROCKSDBStoreClusterUnitSuite.kvstoreMgr
 
   @After
   def tearDown(): Unit = {
@@ -35,10 +36,9 @@ abstract class KVStoreClusterUnitSuite extends JUnitSuite {
   }
 }
 
+object ROCKSDBStoreClusterUnitSuite extends JUnitSuite {
+  val ports: Array[Integer] = Array(47000, 47001, 47002).map(i => i: java.lang.Integer)
 
-object KVStoreClusterUnitSuite extends JUnitSuite {
-  val ports: Array[Integer] = Array(45000, 45001, 45002).map(i => i: java.lang.Integer)
-  //val ports: Array[Integer] = Array(45000).map(i => i: java.lang.Integer)
   class AuxClass extends FunSpec with SharedSparkContext {
 
     override def conf: SparkConf = {
@@ -46,6 +46,7 @@ object KVStoreClusterUnitSuite extends JUnitSuite {
     }
   }
 
+  val backend = "rocksdb"
   var kvstoreMgr: KVStoreManager = _
 
   val auxClass = new AuxClass
@@ -56,10 +57,10 @@ object KVStoreClusterUnitSuite extends JUnitSuite {
   def beforeClass(): Unit = {
     servers = ports.map {
       port =>
-        new KVStoreLocalhostServer(port)
+        new KVStoreLocalhostServer(port, backend)
     }
 
-    servers.foreach(x=> new Thread(x).start())
+    servers.foreach(x => new Thread(x).start())
 
     kvstoreMgr = new KVStoreManager(ports.map(x => ("127.0.0.1", x.toInt)).toSet)
     auxClass.beforeAll()
@@ -74,3 +75,6 @@ object KVStoreClusterUnitSuite extends JUnitSuite {
 
 
 }
+
+
+

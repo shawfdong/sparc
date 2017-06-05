@@ -15,6 +15,10 @@ class KVStoreServiceImpl(val backendName: String, val bloomfilterName: String) e
   protected val backend: Backend =
     if ("lmdb".equals(backendName)) {
       new LMDBBackend()
+    } else if ("leveldb".equals(backendName)) {
+      new LEVELDBackend()
+    } else if ("rocksdb".equals(backendName)) {
+      new ROCKDBackend()
     } else {
       throw new IllegalAccessException("invalid backend name: " + backendName)
     }
