@@ -115,11 +115,8 @@ object GraphCC  extends App with  LazyLogging {
     }
     logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
 
-    val edges = (if (config.n_partition>0){
-      sc.textFile(config.edge_file,minPartitions = config.n_partition)
-    } else{
-      sc.textFile(config.edge_file)
-    }).
+
+    val edges = sc.textFile(config.edge_file).repartition(config.n_partition).
         map { line =>
           line.split(",").take(2).map(_.toLong)
         }
