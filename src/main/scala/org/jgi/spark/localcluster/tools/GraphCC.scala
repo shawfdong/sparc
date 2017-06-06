@@ -144,18 +144,21 @@ object GraphCC  extends App with  LazyLogging {
     val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
       .map(_.mkString(",")).collect
 
-    edges.unpersist()
+    // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
+    //edges.unpersist()
 
     Utils.write_textfile(config.output, result.sorted)
     logger.info(s"total #records=${result.length} save results to ${config.output}")
+
+    val totalTime1 = System.currentTimeMillis
+    logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
 
     //clean up
     clusters_list.foreach {
       _.unpersist()
     }
 
-    val totalTime1 = System.currentTimeMillis
-    logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+
   }
 
 

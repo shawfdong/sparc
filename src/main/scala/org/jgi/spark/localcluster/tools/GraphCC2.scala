@@ -12,7 +12,7 @@ import sext._
 
 object GraphCC2  extends App with  LazyLogging {
 
-  case class Config(edge_file: String = "", output: String = "",
+  case class Config(edge_file: String = "", output: String = "", n_thread:Int = 1,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
                     scratch_dir: String = "/tmp")
 
@@ -29,7 +29,14 @@ object GraphCC2  extends App with  LazyLogging {
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
-        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+        .text("wait $sleep second before stop spark session. For debug purpose, default 0.")
+
+      opt[Int]("n_thread").action((x, c) =>
+        c.copy(n_thread = x)).
+        validate(x =>
+          if (x >= 1) success
+          else failure("n should be positive"))
+        .text("#thread for openmp.")
 
 
       opt[Int]("n_iteration").action((x, c) =>
@@ -81,7 +88,7 @@ object GraphCC2  extends App with  LazyLogging {
     vetexGroupRDD.map {
       x =>
         val group = x._1
-        val g = new JGraph(x._2)
+        val g = new JGraph(x._2,n_thread = config.n_thread)
         val clusters = g.cc
         clusters
     }
