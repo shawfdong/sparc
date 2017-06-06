@@ -28,6 +28,9 @@ object GraphCC  extends App with  LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
 
+      opt[Int]('n', "n_partition").action((x, c) =>
+        c.copy(n_partition = x))
+        .text("paritions for the input")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
@@ -112,8 +115,11 @@ object GraphCC  extends App with  LazyLogging {
     }
     logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
 
-    val edges =
-      sc.textFile(config.edge_file).
+    val edges = (if (config.n_partition>0){
+      sc.textFile(config.edge_file,minPartitions = config.n_partition)
+    } else{
+      sc.textFile(config.edge_file)
+    }).
         map { line =>
           line.split(",").take(2).map(_.toLong)
         }
