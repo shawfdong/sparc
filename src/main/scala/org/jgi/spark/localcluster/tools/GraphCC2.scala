@@ -5,14 +5,15 @@ package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.{DNASeq, JGraph, Utils}
 import sext._
 
 
-object GraphCC2  extends App with  LazyLogging {
+object GraphCC2 extends App with LazyLogging {
 
-  case class Config(edge_file: String = "", output: String = "", n_thread:Int = 1,
+  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
                     scratch_dir: String = "/tmp")
 
@@ -70,7 +71,7 @@ object GraphCC2  extends App with  LazyLogging {
     return 0
   }
 
-  private def process_iterations(groups: Array[(Int, Int)], edges: RDD[Array[Long]], config: Config, sc: SparkContext) = {
+  private def process_iterations(groups: Array[(Int, Int)], edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[Seq[(Long, Long)]] = {
     val n = config.n_iteration
 
 
@@ -85,13 +86,20 @@ object GraphCC2  extends App with  LazyLogging {
 
     var vetexGroupRDD = vertexTuple.groupByKey().repartition(groups.length)
 
-    vetexGroupRDD.map {
+    val retRDD=vetexGroupRDD.map {
       x =>
-        val group = x._1
-        val g = new JGraph(x._2,n_thread = config.n_thread)
-        val clusters = g.cc
-        clusters
+        if (x._2.size > 0) {
+          val group = x._1
+          logger.info(s"processing group $group")
+          val g = new JGraph(x._2, n_thread = config.n_thread)
+          val clusters = g.cc
+          clusters
+        } else {
+          Seq.empty[(Long, Long)]
+        }
     }
+    retRDD.persist(StorageLevel.MEMORY_AND_DISK_SER);
+    retRDD
   }
 
 
@@ -121,7 +129,8 @@ object GraphCC2  extends App with  LazyLogging {
         .map(x => (x * n).toInt)
       (a.take(a.length - 1), a.tail).zipped.toSet.toList.filter(x => x._1 < x._2).sorted.reverse
     }.toArray
-    logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
+    val str_groups = vertex_groups.map(x => s"(${x._1},${x._2})").mkString(",")
+    logger.info(s"request ${config.n_iteration} iterations. truly get ${str_groups} groups")
 
     val edges =
       sc.textFile(config.edge_file).
@@ -130,6 +139,7 @@ object GraphCC2  extends App with  LazyLogging {
         }
 
     edges.cache()
+
     println("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)
 
@@ -149,14 +159,15 @@ object GraphCC2  extends App with  LazyLogging {
     val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
       .map(_.mkString(",")).collect
 
-    edges.unpersist()
-
     Utils.write_textfile(config.output, result.sorted)
     logger.info(s"total #records=${result.length} save results to ${config.output}")
 
-    //clean up
     val totalTime1 = System.currentTimeMillis
     logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+
+    //clean up
+    clusters_list.unpersist()
+    edges.unpersist()
   }
 
 

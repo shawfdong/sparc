@@ -1,12 +1,13 @@
 package org.jgi.spark.localcluster
 
+import com.typesafe.scalalogging.LazyLogging
 import net.jligra.uintVector
 
 /**
   * Created by Lizhen Shi on 5/27/17.
   */
 
-class JGraph(val edges: Iterable[(Long, Long)],val n_thread:Int) {
+class JGraph(val edges: Iterable[(Long, Long)],val n_thread:Int) extends LazyLogging {
   net.jligra.Info.load_native()
 
   var node_mapping: Map[Long, Int] = edges.map(x => Array(x._1, x._2)).flatten.toList.distinct.sorted.zipWithIndex.toMap
@@ -32,7 +33,7 @@ class JGraph(val edges: Iterable[(Long, Long)],val n_thread:Int) {
 
     val original_threads= net.jligra.ligra.getWorkers
     net.jligra.ligra.setWorkers(n_thread)
-    println(s"OPENMP change threads from $original_threads to $n_thread");
+    logger.info(s"OPENMP change threads from $original_threads to $n_thread");
     //6, coo_row.size(), coo_row, coo_col,
     val graph = net.jligra.ligra.create_asymmetric_graph_from_coo(n_nodes, n_edges, coo_row, coo_col, System.getProperty("java.io.tmpdir"))
     val cc = net.jligra.ligra.connected_components(graph)
