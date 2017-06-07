@@ -1,2 +1,7 @@
-nohup /home/spark/software/spark/bin/spark-submit --class org.jgi.spark.localcluster.tools.GraphGen --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 30G --driver-cores 5 --executor-memory 16G --num-executors 6 --executor-cores 2 --conf spark.default.parallelism=100 target/scala-2.11/LocalCluster-assembly-0.1.jar --wait 1000 \
--i 1G_kmerreads.txt  -k 31 -o 1G_edges.txt --use_hdfs --n_partition=12 &
+INPUT=tmp/5G_kmerreads.txt
+OUTPUT=tmp/5G_edges.txt
+WAIT=1
+TARGET=target/scala-2.11/LocalCluster-assembly-0.1.jar 
+
+nohup /home/spark/software/spark/bin/spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 20G --executor-cores 2 --conf spark.executor.extraClassPath=$TARGET --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000  --conf spark.default.parallelism=2700  $TARGET \
+GraphGen --wait $WAIT -i $INPUT  -k 31 -o $OUTPUT  &
