@@ -290,12 +290,12 @@ object KmerCounting extends App with LazyLogging {
 
       } else { //exclude top kmers and 1 kmers
         val rdd = sc.union(rdds)
-        val kmer_count = values.map(_._2).sum //all distinct kmer count (include len 1 kmern and top kmers
+        val kmer_count = values.map(_._2).sum //all distinct kmer count (include len 1 kmern and top kmers)
         val topN = (kmer_count * contamination(config)).toLong
         val takeN = rdd.count - topN
-//        val filteredKmer = rdd.filter(x => x._2 > 1).takeOrdered(takeN)(Ordering[Int].on { x => x._2 })
-//        val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
-        val filteredKmerRDD = rdd.sortBy(x=>x._2).zipWithIndex().filter(x=>x._2<takeN).map(x => x._1._1.to_base64 + " " + x._1._2.toString)
+
+
+        val filteredKmerRDD =rdd.sortBy(x=>(x._2,x._1.hashCode)).zipWithIndex().filter(x=>x._2<takeN).map(x => x._1._1.to_base64 + " " + x._1._2.toString)
         filteredKmerRDD.saveAsTextFile(config.output)
         logger.info(s"total #kmer/topN=${kmer_count}/${topN} save results to hdfs ${config.output}")
       }
