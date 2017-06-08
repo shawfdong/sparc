@@ -13,10 +13,10 @@ import sext._
 import scala.util.Random
 
 
-object KmerMapReads extends App with  LazyLogging {
+object KmerMapReads extends App with LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
-                    n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
+                    _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
                     max_kmer_count: Int = 200, format: String = "seq",
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
@@ -43,6 +43,13 @@ object KmerMapReads extends App with  LazyLogging {
           else failure("only valid for seq, parquet or base64")
         ).text("input format (seq, parquet or base64)")
 
+
+      opt[Double]('c', "contamination").action((x, c) =>
+        c.copy(_contamination = x)).
+        validate(x =>
+          if (x > 0 && x <= 1) success
+          else failure("contamination should be positive and less than 1"))
+        .text("the fraction of top k-mers to keep, others are removed likely due to contamination")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
@@ -92,16 +99,24 @@ object KmerMapReads extends App with  LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]], config: Config, sc: SparkContext) = {
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
+                                topNKmers: Array[DNASeq],
+                                config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
-    logger.info("iteration %d, broadcaset %d kmers".format(i, kmersB.value.length))
+    val kmersTopNB = sc.broadcast(topNKmers)
+    logger.info("iteration %d, broadcaset %d bloom filter kmers, %d topN kmers".format(i, kmersB.value.length, kmersTopNB.value.length))
 
-    val kmersRDD = readsRDD.mapPartitions {
+    val kmersRDD = readsRDD.mapPartitions { //TODO: should be better to create in distribubting style when data is really big.
       iterator =>
         iterator.map {
           case (id, seq) =>
-            Kmer.generate_kmer(seq = seq, k = config.k).filter(x => kmersB.value.contains(x.bytes))
-              .filter(x => Utils.pos_mod(x.hashCode, config.n_iteration) == 0).distinct.map(s => (s, Set(id)))
+            Kmer.generate_kmer(seq = seq, k = config.k)
+              .filter { x =>
+                (Utils.pos_mod(x.hashCode, config.n_iteration) == 0) &&
+                  (kmersB.value.contains(x.bytes)) &&
+                  (!kmersTopNB.value.contains(x))
+              }
+              .distinct.map(s => (s, Set(id)))
         }
     }.flatMap(x => x).reduceByKey(_ ++ _)
 
@@ -117,7 +132,7 @@ object KmerMapReads extends App with  LazyLogging {
     logger.info(s"Finish Iteration $i with count ${filteredKmersRDD.count}")
 
     kmersB.destroy()
-
+    kmersTopNB.destroy()
     filteredKmersRDD
 
   }
@@ -175,23 +190,29 @@ object KmerMapReads extends App with  LazyLogging {
     readsRDD.cache()
 
     val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
-    val n_kmers = kmers.count.toInt
+    val n_kmers = kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
+
+    val topN = (n_kmers * config._contamination).toLong
+    val takeN = (n_kmers - topN).toInt
+
+    val collected_kmers = kmers.collect()
     println("loaded %d kmers".format(n_kmers))
-    kmers.take(5).foreach(println)
+    collected_kmers.take(5).foreach(println)
     val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = {
       // boomfilter at https://github.com/alexandrnikitin/bloom-filter-scala seems has serization problem
       //val bf = new BloomFilterBytes(n_kmers, 0.01)
-      val bf = new GuavaBytesBloomFilter(n_kmers, 0.01)
-      kmers.collect.foreach {
+      val bf = new GuavaBytesBloomFilter(n_kmers.toInt, 0.01)
+      collected_kmers.take(takeN.toInt).foreach {
         s =>
           bf.add(s.bytes)
       }
       bf
     }
+    val topNKmers = collected_kmers.drop(takeN.toInt)
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, readsRDD, kmer_bloomfilter, config, sc)
+        process_iteration(i, readsRDD, kmer_bloomfilter, topNKmers, config, sc)
     }
 
     KmerCounting.delete_hdfs_file(config.output)

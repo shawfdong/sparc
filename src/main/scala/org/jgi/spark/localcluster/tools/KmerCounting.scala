@@ -16,7 +16,7 @@ import sext._
 object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
-                    _contamination: Double = 0.00005, k: Int = 31, format: String = "seq", sleep: Int = 0,
+                     k: Int = 31, format: String = "seq", sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
                     use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2, //redis config, to be removed
                     user_kvstore: Boolean = false, kvstore_ip_ports: Array[(String, Int)] = null,
@@ -108,13 +108,6 @@ object KmerCounting extends App with LazyLogging {
           else failure("n should be positive"))
         .text("#iterations to finish the task. default 1. set a bigger value if resource is low.")
 
-
-      opt[Double]('c', "contamination").action((x, c) =>
-        c.copy(_contamination = x)).
-        validate(x =>
-          if (x > 0 && x <= 1) success
-          else failure("contamination should be positive and less than 1"))
-        .text("the fraction of top k-mers to keep, others are removed likely due to contamination")
 
       opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
         c.copy(scratch_dir = x)).text("where the intermediate results are")
@@ -249,10 +242,6 @@ object KmerCounting extends App with LazyLogging {
   }
 
 
-  def contamination(config: Config): Double = {
-    config._contamination
-  }
-
   def run(config: Config, sc: SparkContext): Unit = {
 
     val start = System.currentTimeMillis
@@ -280,24 +269,13 @@ object KmerCounting extends App with LazyLogging {
       val rdds = values.map(_._1) //WARNING make sure the rdds in the list are exclusive for kmers
       KmerCounting.delete_hdfs_file(config.output)
       if (false) { //take tops
-        val rdd = sc.union(rdds)
-        val kmer_count = values.map(_._2).sum
-        val topN = (kmer_count * contamination(config)).toInt
-        val filteredKmer = rdd.takeOrdered(topN)(Ordering[Int].reverse.on { x => x._2 })
-        val filteredKmerRDD = sc.parallelize(filteredKmer).map(x => x._1.to_base64 + " " + x._2.toString)
-        filteredKmerRDD.saveAsTextFile(config.output)
-        logger.info(s"total #records=${filteredKmerRDD.count}/${kmer_count}/${topN} save results to hdfs ${config.output}")
 
       } else { //exclude top kmers and 1 kmers
         val rdd = sc.union(rdds)
-        val kmer_count = values.map(_._2).sum //all distinct kmer count (include len 1 kmern and top kmers)
-        val topN = (kmer_count * contamination(config)).toLong
-        val takeN = rdd.count - topN
-
-
-        val filteredKmerRDD =rdd.sortBy(x=>(x._2,x._1.hashCode)).zipWithIndex().filter(x=>x._2<takeN).map(x => x._1._1.to_base64 + " " + x._1._2.toString)
+        val kmer_count= values.map(_._2).sum
+        val filteredKmerRDD =rdd.sortBy(x=>(x._2,x._1.hashCode)).map(x => x._1.to_base64 + " " + x._2.toString)
         filteredKmerRDD.saveAsTextFile(config.output)
-        logger.info(s"total #kmer/topN=${kmer_count}/${topN} save results to hdfs ${config.output}")
+        logger.info(s"total #kmer=${kmer_count} save results to hdfs ${config.output}")
       }
 
       //cleanup
