@@ -104,7 +104,7 @@ object KmerMapReads extends App with LazyLogging {
                                 config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
-    logger.info("iteration %d, broadcaset %d bloom filter kmers, %d topN kmers".format(i, kmersB.value.length, kmersTopNB.value.length))
+    logger.info("iteration %d, broadcaset %d bloom filter kmers, %d topN kmers".format(i, kmersB.value.length, kmersTopNB.value.size))
 
     val kmersRDD = readsRDD.mapPartitions { //TODO: should be better to create in distribubting style when data is really big.
       iterator =>
