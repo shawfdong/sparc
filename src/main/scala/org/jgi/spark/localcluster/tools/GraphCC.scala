@@ -12,10 +12,10 @@ import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
 
-object GraphCC  extends App with  LazyLogging {
+object GraphCC extends App with LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "",
-                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10,sleep: Int = 0,
+                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -26,7 +26,7 @@ object GraphCC  extends App with  LazyLogging {
         c.copy(edge_file = x)).text("files of graph edges. e.g. output from GraphGen")
 
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
-        c.copy(output = x)).text("output of the top k-mers")
+        c.copy(output = x)).text("output file")
 
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
@@ -37,7 +37,7 @@ object GraphCC  extends App with  LazyLogging {
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
 
-      opt[Int]( "n_iteration").action((x, c) =>
+      opt[Int]("n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
         validate(x =>
           if (x >= 1) success
@@ -116,7 +116,11 @@ object GraphCC  extends App with  LazyLogging {
     logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
 
 
-    val edges = sc.textFile(config.edge_file).repartition(config.n_partition).
+    val edges =
+      (if (config.n_partition > 0)
+        sc.textFile(config.edge_file).repartition(config.n_partition)
+      else
+        sc.textFile(config.edge_file)).
         map { line =>
           line.split(",").take(2).map(_.toLong)
         }
@@ -141,17 +145,19 @@ object GraphCC  extends App with  LazyLogging {
       clusters_list(0).map(_.swap)
     }
 
+    KmerCounting.delete_hdfs_file(config.output)
+
     val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
-      .map(_.mkString(",")).collect
+      .map(_.mkString(",")).coalesce(1, shuffle = false)
 
-    // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
-    //edges.unpersist()
-
-    Utils.write_textfile(config.output, result.sorted)
-    logger.info(s"total #records=${result.length} save results to ${config.output}")
+    result.saveAsTextFile(config.output)
+    logger.info(s"total #records=${result.count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
     logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+
+    // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
+    //edges.unpersist()
 
     //clean up
     clusters_list.foreach {

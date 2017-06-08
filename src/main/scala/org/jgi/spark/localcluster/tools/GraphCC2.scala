@@ -18,14 +18,14 @@ object GraphCC2 extends App with LazyLogging {
                     scratch_dir: String = "/tmp")
 
   def parse_command_line(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config]("GraphCC") {
+    val parser = new scopt.OptionParser[Config]("GraphCC2") {
       head("GraphCC", Utils.VERSION)
 
       opt[String]('i', "edge_file").required().valueName("<file>").action((x, c) =>
         c.copy(edge_file = x)).text("files of graph edges. e.g. output from GraphGen")
 
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
-        c.copy(output = x)).text("output of the top k-mers")
+        c.copy(output = x)).text("output file")
 
 
       opt[Int]("wait").action((x, c) =>
@@ -156,11 +156,13 @@ object GraphCC2 extends App with LazyLogging {
       clusters_list.flatMap(x => x).map(_.swap)
     }
 
-    val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
-      .map(_.mkString(",")).collect
+    KmerCounting.delete_hdfs_file(config.output)
 
-    Utils.write_textfile(config.output, result.sorted)
-    logger.info(s"total #records=${result.length} save results to ${config.output}")
+    val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
+      .map(_.mkString(",")).coalesce(1,shuffle=false)
+
+    result.saveAsTextFile(config.output)
+    logger.info(s"total #records=${result.count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
     logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
@@ -180,7 +182,7 @@ object GraphCC2 extends App with LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
-        val conf = new SparkConf().setAppName("Spark Graph CC")
+        val conf = new SparkConf().setAppName("Spark Graph CC2")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 
         val sc = new SparkContext(conf)

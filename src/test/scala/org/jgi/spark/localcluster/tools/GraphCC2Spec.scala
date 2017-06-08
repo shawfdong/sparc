@@ -24,7 +24,7 @@ class GraphCC2Spec extends FlatSpec with Matchers with BeforeAndAfter with Share
     println(s"called with arguments\n${cfg.valueTreeString}")
 
     GraphCC2.run(cfg, sc)
-    Thread.sleep(1000*10000)
+    //Thread.sleep(1000*10000)
   }
 
   "GraphCC2" should "work on the test seq files with multiple iterations" in {
