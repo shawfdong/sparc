@@ -90,16 +90,15 @@ object GraphGen  extends App with  LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
+  private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
     val edges = kmer_reads.map(_.combinations(2).map(x => x.sorted).filter {
       case a =>
         Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
     }.map(x => (x(0), x(1)))).flatMap(x => x)
 
-    val groupedEdges = edges.countByValue().filter(x => x._2 >= config.min_shared_kmers)
-      .map(x => (x._1._1.toInt, x._1._2.toInt, x._2.toInt)).toList
+    val rdd = edges.map(x=>(x,1)).reduceByKey(_ + _).filter(x => x._2 >= config.min_shared_kmers)
+      .map(x => (x._1._1.toInt, x._1._2.toInt, x._2.toInt))
 
-    val rdd = sc.parallelize(groupedEdges)
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
     rdd
 
@@ -109,7 +108,7 @@ object GraphGen  extends App with  LazyLogging {
     JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
   }
 
-  private def process_iteration_redis(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
+  private def process_iteration_redis(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
     val THRESH_HOLD = 1024 * 32
 
     kmer_reads.foreachPartition {
@@ -158,7 +157,7 @@ object GraphGen  extends App with  LazyLogging {
     mgr.flushAll()
   }
 
-  private def process_iteration(i: Int, kmer_reads: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
+  private def process_iteration(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
     if (config.use_redis)
       process_iteration_redis(i, kmer_reads, config, sc)
     else
@@ -179,7 +178,7 @@ object GraphGen  extends App with  LazyLogging {
         sc.textFile(config.kmer_reads)
         ).
         map { line =>
-          line.split(" ").apply(1).split(",").map(_.toLong)
+          line.split(" ").apply(1).split(",").map(_.toInt)
         }
 
     kmer_reads.cache()
