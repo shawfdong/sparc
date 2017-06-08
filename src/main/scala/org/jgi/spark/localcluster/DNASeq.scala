@@ -4,8 +4,10 @@ package org.jgi.spark.localcluster
   * Created by Lizhen Shi on 5/12/17.
   */
 
-import java.util.Base64
 import java.nio.ByteBuffer
+import java.util.Base64
+
+import de.greenrobot.common.hash.Murmur3A
 
 
 @SerialVersionUID(51114L)
@@ -38,7 +40,7 @@ class DNASeq(val bytes: Array[Byte]) extends Ordered[DNASeq] with Serializable {
     }
   }
 
-  override def hashCode: Int = {
+  private def hashCode_old: Int = {
     if (bytes.length >= 4) {
       val v = java.nio.ByteBuffer.wrap(bytes.take(4)).getInt()
       if (v > 0) v else -v
@@ -47,6 +49,13 @@ class DNASeq(val bytes: Array[Byte]) extends Ordered[DNASeq] with Serializable {
       bytes.indices.foreach { i => h = (h << 8) + bytes(i) }
       if (h > 0) h else -h
     }
+  }
+
+  override def hashCode: Int = {
+    val murmur3a = new Murmur3A()
+    murmur3a.update(bytes)
+    val h = murmur3a.getValue.toInt
+    if (h > 0) h else -h
   }
 
   override def toString: String = {
@@ -76,7 +85,6 @@ object DNASeq {
 
   val base64_encoder: Base64.Encoder = Base64.getEncoder
   val base64_decoder: Base64.Decoder = Base64.getDecoder
-
 
   def long_to_bytes(i: Long): Array[Byte] = {
     ByteBuffer.allocate(java.lang.Long.SIZE / java.lang.Byte.SIZE).putLong(i).array

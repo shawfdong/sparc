@@ -35,6 +35,7 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.1.8",
   "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
   "org.apache.commons" % "commons-io" % "1.3.2",
+  "de.greenrobot" % "java-common" % "2.3.1",
 
   //"redis.clients" % "jedis" % "2.7.2",
   "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.9.0",
