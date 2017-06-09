@@ -16,7 +16,7 @@ import sext._
 object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
-                     k: Int = 31, format: String = "seq", sleep: Int = 0,
+                    k: Int = 31, format: String = "seq", sleep: Int = 0, canonical_kmer: Boolean = false,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
                     use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2, //redis config, to be removed
                     user_kvstore: Boolean = false, kvstore_ip_ports: Array[(String, Int)] = null,
@@ -35,6 +35,10 @@ object KmerCounting extends App with LazyLogging {
 
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
+
+      opt[Unit]('C', "canonical_kmer").action((_, c) =>
+        c.copy(canonical_kmer = true)).text("apply canonical kmer")
+
 
       opt[String]("kvstore").valueName("<ip:port,ip:port,...>").validate { x =>
         val t = x.split(",").map {
@@ -152,7 +156,7 @@ object KmerCounting extends App with LazyLogging {
     mgr.flushAll()
   }
 
-  private def process_iteration_kvstore(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
+  private def process_iteration_kvstore(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext, kmer_gen_fun: (String) => Array[DNASeq]): RDD[(DNASeq, Int)] = {
     val THRESH_HOLD = 1024 * 32
     readsRDD.foreachPartition {
       iterator =>
@@ -163,7 +167,7 @@ object KmerCounting extends App with LazyLogging {
 
         iterator.foreach {
           line =>
-            Kmer.generate_kmer(seq = line, k = config.k)
+            kmer_gen_fun(line)
               .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
               s =>
                 buf.append(s)
@@ -186,7 +190,7 @@ object KmerCounting extends App with LazyLogging {
 
   }
 
-  private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext): RDD[(DNASeq, Int)] = {
+  private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext, kmer_gen_fun: (String) => Array[DNASeq]): RDD[(DNASeq, Int)] = {
     val THRESH_HOLD = 1024 * 32
     readsRDD.foreachPartition {
       iterator =>
@@ -197,7 +201,7 @@ object KmerCounting extends App with LazyLogging {
 
         iterator.foreach {
           line =>
-            Kmer.generate_kmer(seq = line, k = config.k)
+            kmer_gen_fun(line)
               .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
               s =>
                 buf.append(s)
@@ -222,21 +226,23 @@ object KmerCounting extends App with LazyLogging {
 
   }
 
+
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
+    val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
     val smallKmersRDD = if (config.use_redis)
-      process_iteration_redis(i, readsRDD, config, sc)
+      process_iteration_redis(i, readsRDD, config, sc, kmer_gen_fun)
     else if (config.user_kvstore)
-      process_iteration_kvstore(i, readsRDD, config, sc)
+      process_iteration_kvstore(i, readsRDD, config, sc, kmer_gen_fun)
     else
-      process_iteration_spark(i, readsRDD, config)
+      process_iteration_spark(i, readsRDD, config, kmer_gen_fun)
     val rdd = smallKmersRDD.filter(_._2 > 1)
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
     val kmer_count = rdd.count
     (rdd, kmer_count)
   }
 
-  private def process_iteration_spark(i: Int, readsRDD: RDD[String], config: Config): RDD[(DNASeq, Int)] = {
-    readsRDD.map(x => Kmer.generate_kmer(seq = x, k = config.k)).flatMap(x => x)
+  private def process_iteration_spark(i: Int, readsRDD: RDD[String], config: Config, kmer_gen_fun: (String) => Array[DNASeq]): RDD[(DNASeq, Int)] = {
+    readsRDD.map(x => kmer_gen_fun(x)).flatMap(x => x)
       .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i)
       .map((_, 1)).reduceByKey(_ + _)
   }
@@ -272,8 +278,8 @@ object KmerCounting extends App with LazyLogging {
 
       } else { //exclude top kmers and 1 kmers
         val rdd = sc.union(rdds)
-        val kmer_count= values.map(_._2).sum
-        val filteredKmerRDD =rdd.sortBy(x=>(x._2,x._1.hashCode)).map(x => x._1.to_base64 + " " + x._2.toString)
+        val kmer_count = values.map(_._2).sum
+        val filteredKmerRDD = rdd.sortBy(x => (x._2, x._1.hashCode)).map(x => x._1.to_base64 + " " + x._2.toString)
         filteredKmerRDD.saveAsTextFile(config.output)
         logger.info(s"total #kmer=${kmer_count} save results to hdfs ${config.output}")
       }
@@ -294,7 +300,7 @@ object KmerCounting extends App with LazyLogging {
     options match {
       case Some(_) =>
         val config = options.get
-        if (config.user_kvstore && config.use_redis){
+        if (config.user_kvstore && config.use_redis) {
           logger.error("cannot use both redis and kvstore")
           sys.exit(-1)
         }
