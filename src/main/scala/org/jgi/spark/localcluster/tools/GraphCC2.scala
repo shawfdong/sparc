@@ -13,7 +13,7 @@ import sext._
 
 object GraphCC2 extends App with LazyLogging {
 
-  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1,
+  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1,min_shared_kmers: Int = 2,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
                     scratch_dir: String = "/tmp")
 
@@ -27,6 +27,12 @@ object GraphCC2 extends App with LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output file")
 
+      opt[Int]("min_shared_kmers").action((x, c) =>
+        c.copy(min_shared_kmers = x)).
+        validate(x =>
+          if (x >= 2) success
+          else failure("min_shared_kmers should be greater than 2"))
+        .text("minimum number of kmers that two reads share")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
@@ -135,8 +141,8 @@ object GraphCC2 extends App with LazyLogging {
     val edges =
       sc.textFile(config.edge_file).
         map { line =>
-          line.split(",").take(2).map(_.toLong)
-        }
+          line.split(",").map(_.toLong)
+        }.filter(x=>x(2)>=config.min_shared_kmers).map(_.take(2))
 
     edges.cache()
 
@@ -159,7 +165,7 @@ object GraphCC2 extends App with LazyLogging {
     KmerCounting.delete_hdfs_file(config.output)
 
     val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
-      .map(_.mkString(",")).coalesce(1,shuffle=false)
+      .map(_.mkString(",")).coalesce(18,shuffle=false)
 
     result.saveAsTextFile(config.output)
     logger.info(s"total #records=${result.count} save results to ${config.output}")
