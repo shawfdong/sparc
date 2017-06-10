@@ -6,7 +6,7 @@ package org.jgi.spark.localcluster
 object Kmer {
 
   private def canonical_kmer(seq: String) = {
-    val rc = seq.map(DNASeq.rc(_))
+    val rc =DNASeq.reverse_complement(seq)
     if (rc < seq) rc else seq
   }
 

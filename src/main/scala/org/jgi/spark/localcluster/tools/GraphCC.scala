@@ -81,7 +81,7 @@ object GraphCC extends App with LazyLogging {
 
 
     val graph = Graph.fromEdgeTuples(
-      vertexTuple.union(vertexTuple.map(x=>(x._2,x._1))), 1
+      vertexTuple, 1
     )
     val cc = graph.connectedComponents()
     val clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong))
@@ -102,7 +102,7 @@ object GraphCC extends App with LazyLogging {
     }
     val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2) //(c,c)
 
-    val graph = Graph.fromEdgeTuples(new_edges.union(new_edges.map(x=>(x._2,x._1))), 1)
+    val graph = Graph.fromEdgeTuples(new_edges, 1)
     val cc = graph.connectedComponents()
     val new_clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
       join(clusters.map(_.swap)).map(_._2) //(x,v)
@@ -110,7 +110,7 @@ object GraphCC extends App with LazyLogging {
     new_clusters
   }
 
-  def run(config: Config, sc: SparkContext): Unit = {
+  def run(config: Config, sc: SparkContext): Long = {
 
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
@@ -159,7 +159,8 @@ object GraphCC extends App with LazyLogging {
       .map(_.mkString(",")).coalesce(18, shuffle = false)
 
     result.saveAsTextFile(config.output)
-    logger.info(s"total #records=${result.count} save results to ${config.output}")
+    val result_count=result.count
+    logger.info(s"total #records=${result_count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
     logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
@@ -171,8 +172,7 @@ object GraphCC extends App with LazyLogging {
     clusters_list.foreach {
       _.unpersist()
     }
-
-
+    result_count
   }
 
 

@@ -17,7 +17,7 @@ object KmerMapReads extends App with LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
-                    max_kmer_count: Int = 200, format: String = "seq",
+                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -43,6 +43,9 @@ object KmerMapReads extends App with LazyLogging {
           else failure("only valid for seq, parquet or base64")
         ).text("input format (seq, parquet or base64)")
 
+
+      opt[Unit]('C', "canonical_kmer").action((_, c) =>
+        c.copy(canonical_kmer = true)).text("apply canonical kmer")
 
       opt[Double]('c', "contamination").action((x, c) =>
         c.copy(_contamination = x)).
@@ -105,12 +108,13 @@ object KmerMapReads extends App with LazyLogging {
     val kmersB = sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
     logger.info("iteration %d, broadcaset %d bloom filter kmers, %d topN kmers".format(i, kmersB.value.length, kmersTopNB.value.size))
+    val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
 
-    val kmersRDD = readsRDD.mapPartitions { //TODO: should be better to create in distribubting style when data is really big.
+    val kmersRDD = readsRDD.mapPartitions {
       iterator =>
         iterator.map {
           case (id, seq) =>
-            Kmer.generate_kmer(seq = seq, k = config.k)
+            kmer_gen_fun(seq)
               .filter { x =>
                 (Utils.pos_mod(x.hashCode, config.n_iteration) == 0) &&
                   (kmersB.value.contains(x.bytes)) &&
@@ -198,7 +202,7 @@ object KmerMapReads extends App with LazyLogging {
     val collected_kmers = kmers.collect()
     println("loaded %d kmers".format(n_kmers))
     collected_kmers.take(5).foreach(println)
-    val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = {
+    val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = { //TODO: should be better to create in distribubting style when data is really big.
       // boomfilter at https://github.com/alexandrnikitin/bloom-filter-scala seems has serization problem
       //val bf = new BloomFilterBytes(n_kmers, 0.01)
       val bf = new GuavaBytesBloomFilter(n_kmers.toInt, 0.01)

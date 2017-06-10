@@ -16,7 +16,7 @@ object Kmer2 {
   def generate_kmer(seq: String, k: Int): Array[DNASeq] = {
     seq.split("N").flatMap {
       subSeq => {
-        _generate_kmer(subSeq, k) ++  _generate_kmer(subSeq.map(DNASeq.rc(_)), k)
+        _generate_kmer(subSeq, k) ++  _generate_kmer(DNASeq.reverse_complement(subSeq), k)
       }
     }.distinct
   }

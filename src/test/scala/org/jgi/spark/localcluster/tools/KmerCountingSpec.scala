@@ -47,4 +47,11 @@ class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
     KmerCounting.run(cfg, sc)
   }
 
+  //*************************************** fake
+  "kmer counting" should "work on fake seq file" in {
+    val cfg = KmerCounting.parse_command_line("-i test/small -p fake_sample.seq -o tmp/kmercounting_seq_fake.txt --n_iteration 1".split(" ")).get
+    print(s"called with arguments\n${cfg.valueTreeString}")
+    KmerCounting.run(cfg, sc)
+  }
+
 }

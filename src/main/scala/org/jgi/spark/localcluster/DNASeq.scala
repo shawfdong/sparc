@@ -86,6 +86,9 @@ object DNASeq {
   val base64_encoder: Base64.Encoder = Base64.getEncoder
   val base64_decoder: Base64.Decoder = Base64.getDecoder
 
+  def reverse_complement(s:String) ={
+    s.reverse.map(DNASeq.rc(_))
+  }
   def long_to_bytes(i: Long): Array[Byte] = {
     ByteBuffer.allocate(java.lang.Long.SIZE / java.lang.Byte.SIZE).putLong(i).array
   }

@@ -98,7 +98,7 @@ object GraphCC2 extends App with LazyLogging {
           val group = x._1
           val group_edges=x._2
           logger.info(s"processing group $group")
-          val g = new JGraph(group_edges ++ group_edges.map(x=>(x._2,x._1)), n_thread = config.n_thread)
+          val g = new JGraph(group_edges, n_thread = config.n_thread)
           val clusters = g.cc
           clusters
         } else {
@@ -116,7 +116,7 @@ object GraphCC2 extends App with LazyLogging {
       x => (x(0), x(1)) //(v,v)
     }
     val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2).distinct.collect //(c,c)
-    val graph = new JGraph(new_edges ++ new_edges.map(x=>(x._2,x._1)))
+    val graph = new JGraph(new_edges)
 
     val cc = sc.parallelize(graph.cc)
     val new_clusters = cc.map(x => (x._1.toLong, x._2.toLong)). //(c,x)

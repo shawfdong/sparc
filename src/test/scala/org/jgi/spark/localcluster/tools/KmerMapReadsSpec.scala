@@ -55,4 +55,14 @@ class KmerMapReadsSpec extends FlatSpec with Matchers with BeforeAndAfter with S
 
     KmerMapReads.run(cfg, sc)
   }
+
+  //*************************************** fake
+  "kmer mapping" should "work on the fake seq file" in {
+    val cfg = KmerMapReads.parse_command_line(
+      "--reads test/small -p fake_sample.seq --kmer test/kmercounting_seq_fake.txt -k 31  -o tmp/kmermapping_seq_fake.txt --n_iteration 1".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    //Thread.sleep(1000 * 10000)
+  }
 }

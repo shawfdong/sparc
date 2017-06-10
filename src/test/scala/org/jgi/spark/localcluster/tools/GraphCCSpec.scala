@@ -25,4 +25,14 @@ class GraphCCSpec extends FlatSpec with Matchers with BeforeAndAfter with Shared
     GraphCC.run(cfg, sc)
     //Thread.sleep(1000 * 10000)
   }
+
+  "GraphCC" should "work on the fake seq file" in {
+    val cfg = GraphCC.parse_command_line(
+      "-i test/graph_gen_fake.txt   -o tmp/graphx_cc_fake.txt --n_iteration 1 --min_reads_per_cluster 0".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    GraphCC.run(cfg, sc) should be (100)
+    //Thread.sleep(1000 * 10000)
+  }
 }
