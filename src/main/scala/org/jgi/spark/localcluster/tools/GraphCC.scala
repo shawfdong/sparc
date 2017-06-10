@@ -81,7 +81,7 @@ object GraphCC extends App with LazyLogging {
 
 
     val graph = Graph.fromEdgeTuples(
-      vertexTuple, 1
+      vertexTuple.union(vertexTuple.map(x=>(x._2,x._1))), 1
     )
     val cc = graph.connectedComponents()
     val clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong))
@@ -102,7 +102,7 @@ object GraphCC extends App with LazyLogging {
     }
     val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2) //(c,c)
 
-    val graph = Graph.fromEdgeTuples(new_edges, 1)
+    val graph = Graph.fromEdgeTuples(new_edges.union(new_edges.map(x=>(x._2,x._1))), 1)
     val cc = graph.connectedComponents()
     val new_clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
       join(clusters.map(_.swap)).map(_._2) //(x,v)
