@@ -235,9 +235,13 @@ object KmerCounting extends App with LazyLogging {
       process_iteration_kvstore(i, readsRDD, config, sc, kmer_gen_fun)
     else
       process_iteration_spark(i, readsRDD, config, kmer_gen_fun)
+
     val rdd = smallKmersRDD.filter(_._2 > 1)
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    val raw_count = smallKmersRDD.count
     val kmer_count = rdd.count
+    logger.info(s"filter out ${kmer_count} kmers (count>1) from total ${raw_count} kmers")
+
     (rdd, kmer_count)
   }
 

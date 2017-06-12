@@ -43,9 +43,16 @@ class MannualTest extends FlatSpec with Matchers {
     a
   }
 
+  // 3925 793877
   val seqs = Array("AGGGCAACAGAAGATGATAACAGAAAGGCATTTTCCATGCCTATATTCGGTCGTTTTACCCAGAGAGCCCAGCAGACACTGATGCTGGCCCAGCGGATCGCNTCTGTCCCAGCTTATGGGATTCCAGCACGCTGTTTTCCAGCGTTTTCTTTGCCCTGGGGCTCAGCTCGATCCGGTTTCCTCTGGCCTCTTCCGGATCACCG"
     , "GGGCGGAAACCCGGGCATACGGCGGGGTCCTTCTTCGTTTCCCGCGTTTTCACGCATCTGCCGCAGCAGCTGCTCCCCTGCGGCCGGACGGTGCACAACGGNTCCAGGATCCGGATACGCCCAGGAGCCCCCGGATCGAACTGAGCCCGCGCGCAAAGAAAACGCTGGAAAACAGCGTGCTGGAAAGCCATAAACTGGGACAG")
 
+  val common1=Set("TCCAGCACGCTGTTTTCCAGCGTTTTCTTTG",
+  "AAAGAAAACGCTGGAAAACAGCGTGCTGGAA",
+  "TTCCAGCACGCTGTTTTCCAGCGTTTTCTTT",
+  "CCAGCACGCTGTTTTCCAGCGTTTTCTTTGC",
+  "GCAAAGAAAACGCTGGAAAACAGCGTGCTGG",
+  "CAAAGAAAACGCTGGAAAACAGCGTGCTGGA")
   @Test
   def test1(): Unit = {
     val seq_kmers = seqs.map(gen_kmer(_, 31))
@@ -55,9 +62,7 @@ class MannualTest extends FlatSpec with Matchers {
     kmers.keys.toSet.size should be(kmers.size)
 
     println("Common kmers")
-    seq_kmers(0).toSet.intersect(seq_kmers(1).toSet).foreach(println)
-
-    println(seq_kmers(0).map(x => "\"" + x + "\"").mkString(","))
+    seq_kmers(0).toSet.intersect(seq_kmers(1).toSet) should equal (common1)
 
   }
 
@@ -84,6 +89,8 @@ class MannualTest extends FlatSpec with Matchers {
 
     println("Common kmers")
     seq_kmers(0).toSet.intersect(seq_kmers(1).toSet).map(_.to_bases(31)).foreach(println)
+    seq_kmers(0).toSet.intersect(seq_kmers(1).toSet).map(_.to_base64).foreach(println)
+
   }
 
   @Test
