@@ -3,6 +3,7 @@
   */
 package org.jgi.spark.localcluster.tools
 
+import breeze.util.BloomFilter
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -102,12 +103,12 @@ object KmerMapReads extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: BloomFilter[Array[Byte]],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
-    logger.info("iteration %d, broadcaset %d bloom filter kmers, %d topN kmers".format(i, kmersB.value.length, kmersTopNB.value.size))
+    logger.info("iteration %d, broadcaset %d topN kmers".format(i, kmersTopNB.value.size))
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
 
     val kmersRDD = readsRDD.mapPartitions {
@@ -193,26 +194,21 @@ object KmerMapReads extends App with LazyLogging {
     val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
-    val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
+    val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64).zipWithIndex()
     val n_kmers = kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
 
     val topN = (n_kmers * config._contamination).toLong
-    val takeN = (n_kmers - topN).toInt
+    val takeN = (n_kmers - topN).toLong
 
-    val collected_kmers = kmers.collect()
+    val topNKmers = kmers.filter(u => u._2 >= takeN).map(_._1).collect
+    val n_kmer_group = math.max(takeN / 4e6, 1).toInt
+    val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group).mapPartitions { iter =>
+      val bf = BloomFilter.optimallySized[Array[Byte]](takeN, 0.01)
+      iter.foreach(i => bf += i.bytes)
+      Iterator(bf)
+    }.treeReduce(_ | _, 5)
+
     println("loaded %d kmers".format(n_kmers))
-    collected_kmers.take(5).foreach(println)
-    val kmer_bloomfilter: AbstractBloomFilter[Array[Byte]] = { //TODO: should be better to create in distribubting style when data is really big.
-      // boomfilter at https://github.com/alexandrnikitin/bloom-filter-scala seems has serization problem
-      //val bf = new BloomFilterBytes(n_kmers, 0.01)
-      val bf = new GuavaBytesBloomFilter(n_kmers.toInt, 0.01)
-      collected_kmers.take(takeN.toInt).foreach {
-        s =>
-          bf.add(s.bytes)
-      }
-      bf
-    }
-    val topNKmers = collected_kmers.drop(takeN.toInt)
 
     val rdds = 0.until(config.n_iteration).map {
       i =>

@@ -2,6 +2,7 @@ package org.jgi.spark.localcluster.bf
 
 import java.util.Random
 
+import breeze.util.BloomFilter
 import org.jgi.spark.localcluster.GuavaBytesBloomFilter
 
 /**
@@ -113,6 +114,18 @@ object ScalaScaleBloomFilter {
       _ =>
         random.nextBytes(bytes)
         bf3.add(bytes)
+    }
+    dt = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
+    println(dt)
+
+
+
+    val bf4 = BloomFilter.optimallySized[Array[Byte]](itemsExpected.toInt, falsePositiveRate)
+    t0 = System.currentTimeMillis
+    0.until(N).foreach {
+      _ =>
+        random.nextBytes(bytes)
+        bf4 += bytes
     }
     dt = N/(-1 * (t0 - System.currentTimeMillis) / 1000.0)
     println(dt)

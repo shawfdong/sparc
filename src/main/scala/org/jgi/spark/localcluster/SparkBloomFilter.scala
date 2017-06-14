@@ -101,8 +101,9 @@ class CuckooFilterString(expectedElements: Int, falsePositiveRate: Double)
 }
 
   @SerialVersionUID(789L)
-  class GuavaBytesBloomFilter(expectedElements: Int, falsePositiveRate: Double)
+  class GuavaBytesBloomFilter(expectedElements: Long, falsePositiveRate: Double)
     extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
+
     private val underlying = BloomFilter.create[Array[Byte]](Funnels.byteArrayFunnel(), expectedElements, falsePositiveRate)
 
     override def mightContain(o: Array[Byte]): Boolean =  underlying.mightContain(o)
