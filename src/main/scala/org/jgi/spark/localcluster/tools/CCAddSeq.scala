@@ -5,7 +5,6 @@ package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.tools.KmerMapReads.make_reads_rdd
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
@@ -77,8 +76,8 @@ object CCAddSeq extends App with LazyLogging {
 
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
-    val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_partition, sc).map(x => (x._1.toInt, x._2))
-    val resultRDD = ccRDD.join(readsRDD).map(_._2).map(x => x._1.toString + "\t" + x._2).coalesce(1, shuffle = false)
+    val readsRDD = KmerMapReads.make_read_id_rdd(seqFiles, config.format, sc).map(x => (x._1.toInt, x._2))
+    val resultRDD = ccRDD.join(readsRDD).map(_._2).map(x => x._2 + "\t" + x._1.toString).coalesce(18, shuffle = false)
     KmerCounting.delete_hdfs_file(config.output)
     resultRDD.saveAsTextFile(config.output)
 

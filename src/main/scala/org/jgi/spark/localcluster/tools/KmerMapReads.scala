@@ -142,6 +142,27 @@ object KmerMapReads extends App with LazyLogging {
 
   }
 
+  def make_read_id_rdd(file: String, format: String,  sc: SparkContext): RDD[(Long, String)] = {
+    if (format.equals("parquet")) throw new NotImplementedError
+    else {
+      var textRDD =
+        sc.textFile(file)
+
+      if (format.equals("seq")) {
+        textRDD.map {
+          line => line.split("\t|\n")
+        }.map { x => (x(0).toLong, x(1)) }
+      }
+
+      else if (format.equals("base64")) {
+        throw new IllegalArgumentException
+      }
+      else
+        throw new IllegalArgumentException
+    }
+
+  }
+
   def make_reads_rdd(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[(Long, String)] = {
     make_reads_rdd(file, format, n_partition, -1, sc)
   }
@@ -195,6 +216,8 @@ object KmerMapReads extends App with LazyLogging {
     readsRDD.cache()
 
     val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64).zipWithIndex()
+      kmers.cache()
+
     val n_kmers = kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
 
     val topN = (n_kmers * config._contamination).toLong
@@ -206,9 +229,11 @@ object KmerMapReads extends App with LazyLogging {
       val bf = BloomFilter.optimallySized[Array[Byte]](takeN, 0.01)
       iter.foreach(i => bf += i.bytes)
       Iterator(bf)
-    }.treeReduce(_ | _, 5)
+    }.treeReduce(_ | _, 2)
 
     println("loaded %d kmers".format(n_kmers))
+
+    kmers.unpersist()
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
