@@ -142,7 +142,7 @@ object KmerMapReads extends App with LazyLogging {
 
   }
 
-  def make_read_id_rdd(file: String, format: String,  sc: SparkContext): RDD[(Long, String)] = {
+  def make_read_id_rdd(file: String, format: String, sc: SparkContext): RDD[(Long, String)] = {
     if (format.equals("parquet")) throw new NotImplementedError
     else {
       var textRDD =
@@ -215,25 +215,26 @@ object KmerMapReads extends App with LazyLogging {
     val readsRDD = make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
-    val kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64).zipWithIndex()
-      kmers.cache()
+    val _kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
+    _kmers.cache()
+    val n_kmers = _kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
 
-    val n_kmers = kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
+    val kmers = _kmers.zipWithIndex()
 
     val topN = (n_kmers * config._contamination).toLong
     val takeN = (n_kmers - topN).toLong
 
     val topNKmers = kmers.filter(u => u._2 >= takeN).map(_._1).collect
-    val n_kmer_group = math.max(takeN / 4e6, 1).toInt
+    val n_kmer_group = math.max(takeN / 400e6, 1).toInt
     val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group).mapPartitions { iter =>
-      val bf = BloomFilter.optimallySized[Array[Byte]](takeN, 0.01)
+      val bf = BloomFilter.optimallySized[Array[Byte]](takeN, 0.02)
       iter.foreach(i => bf += i.bytes)
       Iterator(bf)
     }.treeReduce(_ | _, 2)
 
     println("loaded %d kmers".format(n_kmers))
 
-    kmers.unpersist()
+    _kmers.unpersist()
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
@@ -273,7 +274,7 @@ object KmerMapReads extends App with LazyLogging {
         }
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
-        val conf = new SparkConf().setAppName("Spark Kmer Map Reads")
+        val conf = new SparkConf().setAppName("Spark Kmer Map Reads").set("spark.kryoserializer.buffer.max", "512m")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 
         val sc = new SparkContext(conf)
