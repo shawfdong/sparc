@@ -205,22 +205,24 @@ object KmerMapReads extends App with LazyLogging {
   }
 
   private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long) = {
-    val n_kmer_group = math.max(takeN / 400e6, 1).toInt
+    val n_kmer_group = math.max(takeN / 300e6 + 1, 1).toInt
     logger.info(s"need reduce $n_kmer_group for $takeN kmers.")
     if (false) {
       val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group)
         .mapPartitions { iter =>
-          val bf = new GuavaBytesBloomFilter(takeN, 0.02)
+          val bf = new GuavaBytesBloomFilter(takeN, 0.05)
           iter.foreach(i => bf.add(i.bytes))
           Iterator(bf)
         }.treeReduce(_ | _, 2)
       kmer_bloomfilter
     } else {
-      val bf = new GuavaBytesBloomFilter(takeN, 0.02)
+      val bf = new GuavaBytesBloomFilter(takeN, 0.05)
       (0 until n_kmer_group).foreach {
         i =>
-          kmers.filter(u => u._2 < takeN).filter(u => u._2 % n_kmer_group == i).map(_._1)
-            .collect.foreach(kmer => bf.add(kmer.bytes))
+          val local_kmers = kmers.filter(u => u._2 < takeN).filter(u => u._2 % n_kmer_group == i)
+            .map(_._1.bytes).collect
+          logger.info(s"Receive ${local_kmers.length} kmers for group $i")
+          local_kmers.foreach(kmer => bf.add(kmer))
       }
       bf
     }
