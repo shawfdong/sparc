@@ -3,7 +3,6 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import breeze.util.BloomFilter
 import com.google.common.hash.GuavaBytesBloomFilter
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
@@ -104,7 +103,7 @@ object KmerMapReads extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers:AbstractBloomFilter[Array[Byte]],
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
@@ -205,6 +204,28 @@ object KmerMapReads extends App with LazyLogging {
 
   }
 
+  private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long) = {
+    val n_kmer_group = math.max(takeN / 400e6, 1).toInt
+    logger.info(s"need reduce $n_kmer_group for $takeN kmers.")
+    if (false) {
+      val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group)
+        .mapPartitions { iter =>
+          val bf = new GuavaBytesBloomFilter(takeN, 0.02)
+          iter.foreach(i => bf.add(i.bytes))
+          Iterator(bf)
+        }.treeReduce(_ | _, 2)
+      kmer_bloomfilter
+    } else {
+      val bf = new GuavaBytesBloomFilter(takeN, 0.02)
+      (0 until n_kmer_group).foreach {
+        i =>
+          kmers.filter(u => u._2 < takeN).filter(u => u._2 % n_kmer_group == i).map(_._1)
+            .collect.foreach(kmer => bf.add(kmer.bytes))
+      }
+      bf
+    }
+  }
+
   def run(config: Config, sc: SparkContext): Unit = {
 
     val start = System.currentTimeMillis
@@ -226,13 +247,8 @@ object KmerMapReads extends App with LazyLogging {
     val takeN = (n_kmers - topN).toLong
 
     val topNKmers = kmers.filter(u => u._2 >= takeN).map(_._1).collect
-    val n_kmer_group = math.max(takeN / 400e6, 1).toInt
-    val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group)
-      .mapPartitions { iter =>
-      val bf =new GuavaBytesBloomFilter(takeN, 0.02)
-      iter.foreach(i => bf.add(i.bytes))
-      Iterator(bf)
-    }.treeReduce(_ | _, 2)
+    val kmer_bloomfilter = make_bloomfilter(kmers, takeN)
+
 
     println("loaded %d kmers".format(n_kmers))
 
