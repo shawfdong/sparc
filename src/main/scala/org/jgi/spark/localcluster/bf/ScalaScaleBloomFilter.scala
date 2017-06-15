@@ -3,7 +3,7 @@ package org.jgi.spark.localcluster.bf
 import java.util.Random
 
 import breeze.util.BloomFilter
-import org.jgi.spark.localcluster.GuavaBytesBloomFilter
+import com.google.common.hash.GuavaBytesBloomFilter
 
 /**
   * Created by Lizhen Shi on 5/31/17.

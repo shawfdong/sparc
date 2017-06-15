@@ -3,7 +3,6 @@ package org.jgi.spark.localcluster
 import java.util.UUID
 
 import bloomfilter.mutable.{BloomFilter => ScalaBloomFilter, CuckooFilter => ScalaCuckooFilter}
-import com.google.common.hash.{BloomFilter, Funnels}
 
 /**
   * Created by Lizhen Shi on 5/25/17.
@@ -20,11 +19,11 @@ abstract class AbstractBloomFilter[T](val expectedElements: Long, val falsePosit
 
   final def contains(o: T): Boolean = mightContain(o)
 
-  def  _add(x: T): Unit
+  protected def _add(x: T): Unit
 
-  final def  add(x: T): Unit = {
+  final def add(x: T): Unit = {
     _add(x)
-    length+=1
+    length += 1
   }
 
   override def finalize(): Unit = {
@@ -51,7 +50,6 @@ class BloomFilterBytes(expectedElements: Long, falsePositiveRate: Double)
 }
 
 
-
 @SerialVersionUID(789L)
 class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
   extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
@@ -66,7 +64,6 @@ class CuckooFilterBytes(expectedElements: Int, falsePositiveRate: Double)
     super.finalize()
   }
 }
-
 
 
 @SerialVersionUID(789L)
@@ -99,15 +96,3 @@ class CuckooFilterString(expectedElements: Int, falsePositiveRate: Double)
     super.finalize()
   }
 }
-
-  @SerialVersionUID(789L)
-  class GuavaBytesBloomFilter(expectedElements: Long, falsePositiveRate: Double)
-    extends AbstractBloomFilter[Array[Byte]](expectedElements, falsePositiveRate) {
-
-    private val underlying = BloomFilter.create[Array[Byte]](Funnels.byteArrayFunnel(), expectedElements, falsePositiveRate)
-
-    override def mightContain(o: Array[Byte]): Boolean =  underlying.mightContain(o)
-
-    override def _add(x: Array[Byte]): Unit = underlying.put(x)
-  }
-

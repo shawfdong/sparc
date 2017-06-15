@@ -4,6 +4,7 @@
 package org.jgi.spark.localcluster.tools
 
 import breeze.util.BloomFilter
+import com.google.common.hash.GuavaBytesBloomFilter
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -103,7 +104,7 @@ object KmerMapReads extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: BloomFilter[Array[Byte]],
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers:AbstractBloomFilter[Array[Byte]],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
     val kmersB = sc.broadcast(kmers)
@@ -226,9 +227,10 @@ object KmerMapReads extends App with LazyLogging {
 
     val topNKmers = kmers.filter(u => u._2 >= takeN).map(_._1).collect
     val n_kmer_group = math.max(takeN / 400e6, 1).toInt
-    val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group).mapPartitions { iter =>
-      val bf = BloomFilter.optimallySized[Array[Byte]](takeN, 0.02)
-      iter.foreach(i => bf += i.bytes)
+    val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group)
+      .mapPartitions { iter =>
+      val bf =new GuavaBytesBloomFilter(takeN, 0.02)
+      iter.foreach(i => bf.add(i.bytes))
       Iterator(bf)
     }.treeReduce(_ | _, 2)
 
