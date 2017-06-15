@@ -1,6 +1,5 @@
 package com.google.common.hash
 
-import com.google.common.hash.BloomFilterStrategies.BitArray
 import GuavaBloomFilterStrategies.GuavaBitArray
 import org.jgi.spark.localcluster.AbstractBloomFilter
 
@@ -41,15 +40,15 @@ class GuavaBytesBloomFilter(expectedElements: Long, falsePositiveRate: Double)
 
     val strategy = GuavaBloomFilterStrategies.MURMUR128_MITZ_64
 
-    numBits = BloomFilter.optimalNumOfBits(expectedElements, falsePositiveRate)
-    numHashFunctions = BloomFilter.optimalNumOfHashFunctions(expectedElements, numBits)
+    numBits = GuavaBloomFilter.optimalNumOfBits(expectedElements, falsePositiveRate)
+    numHashFunctions = GuavaBloomFilter.optimalNumOfHashFunctions(expectedElements, numBits)
     try {
 
       val bitarray = new GuavaBitArray(numBits)
       return new GuavaBloomFilter[Array[Byte]](bitarray, numHashFunctions, funnel, strategy)
     } catch {
       case e: IllegalArgumentException =>
-        throw new IllegalArgumentException("Could not create BloomFilter of " + numBits + " bits", e)
+        throw new IllegalArgumentException("Could not create GuavaBloomFilter of " + numBits + " bits", e)
     }
   }
 

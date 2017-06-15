@@ -25,12 +25,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Collections of strategies of generating the k * log(M) bits required for an element to
- * be mapped to a BloomFilter of M bits and k hash functions. These
+ * be mapped to a GuavaBloomFilter of M bits and k hash functions. These
  * strategies are part of the serialized form of the Bloom filters that use them, thus they must be
  * preserved as is (no updates allowed, only introduction of new versions).
  * <p>
  * Important: the order of the constants cannot change, and they cannot be deleted - we depend
- * on their ordinal for BloomFilter serialization.
+ * on their ordinal for GuavaBloomFilter serialization.
  *
  * @author Dimitris Andreou
  * @author Kurt Alfred Kluever
