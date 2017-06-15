@@ -1,6 +1,7 @@
 package com.google.common.hash
 
 import com.google.common.hash.BloomFilterStrategies.BitArray
+import GuavaBloomFilterStrategies.GuavaBitArray
 import org.jgi.spark.localcluster.AbstractBloomFilter
 
 /**
@@ -21,9 +22,9 @@ class GuavaBytesBloomFilter(expectedElements: Long, falsePositiveRate: Double)
     val a = other.underlying.bits.data
     val b = this.underlying.bits.data
     require(a.length == b.length)
-    val bitarray = new BitArray(a.zip(b).map(u => u._1 | u._2))
-    this.underlying = new MyBloomFilter[Array[Byte]](bitarray, numHashFunctions,
-      Funnels.byteArrayFunnel(), BloomFilterStrategies.MURMUR128_MITZ_64)
+    val bitarray = new GuavaBitArray(a.zip(b).map(u => u._1 | u._2))
+    this.underlying = new GuavaBloomFilter[Array[Byte]](bitarray, numHashFunctions,
+      Funnels.byteArrayFunnel(), GuavaBloomFilterStrategies.MURMUR128_MITZ_64)
     this
   }
 
@@ -32,20 +33,20 @@ class GuavaBytesBloomFilter(expectedElements: Long, falsePositiveRate: Double)
 
   private var numHashFunctions = 0
 
-  private def create_bloom_filter(): MyBloomFilter[Array[Byte]] = {
+  private def create_bloom_filter(): GuavaBloomFilter[Array[Byte]] = {
     val funnel = Funnels.byteArrayFunnel()
     require(expectedElements > 0, "Expected insertions (%s) must be >  0")
     require(falsePositiveRate > 0.0, "False positive probability (%s) must be > 0.0")
     require(falsePositiveRate < 1.0, "False positive probability (%s) must be < 1.0")
 
-    val strategy = BloomFilterStrategies.MURMUR128_MITZ_64
+    val strategy = GuavaBloomFilterStrategies.MURMUR128_MITZ_64
 
     numBits = BloomFilter.optimalNumOfBits(expectedElements, falsePositiveRate)
     numHashFunctions = BloomFilter.optimalNumOfHashFunctions(expectedElements, numBits)
     try {
 
-      val bitarray = new BloomFilterStrategies.BitArray(numBits)
-      return new MyBloomFilter[Array[Byte]](bitarray, numHashFunctions, funnel, strategy)
+      val bitarray = new GuavaBitArray(numBits)
+      return new GuavaBloomFilter[Array[Byte]](bitarray, numHashFunctions, funnel, strategy)
     } catch {
       case e: IllegalArgumentException =>
         throw new IllegalArgumentException("Could not create BloomFilter of " + numBits + " bits", e)
