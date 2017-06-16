@@ -15,7 +15,7 @@ import sext._
 object GraphCC extends App with LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
-                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
+                    n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -40,10 +40,16 @@ object GraphCC extends App with LazyLogging {
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
         validate(x =>
-          if (x >= 2) success
+          if (x >= 1) success
           else failure("min_shared_kmers should be greater than 2"))
         .text("minimum number of kmers that two reads share")
 
+      opt[Int]("max_shared_kmers").action((x, c) =>
+        c.copy(max_shared_kmers = x)).
+        validate(x =>
+          if (x >= 1) success
+          else failure("max_shared_kmers should be greater than 1"))
+        .text("max number of kmers that two reads share")
 
       opt[Int]("n_iteration").action((x, c) =>
         c.copy(n_iteration = x)).
@@ -131,7 +137,7 @@ object GraphCC extends App with LazyLogging {
         sc.textFile(config.edge_file)).
         map { line =>
           line.split(",").map(_.toLong)
-        }.filter(x=>x(2)>=config.min_shared_kmers).map(_.take(2))
+        }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
 
     edges.cache()
     println("loaded %d edges".format(edges.count))
@@ -159,7 +165,7 @@ object GraphCC extends App with LazyLogging {
       .map(_.mkString(",")).coalesce(18, shuffle = false)
 
     result.saveAsTextFile(config.output)
-    val result_count=result.count
+    val result_count = result.count
     logger.info(s"total #records=${result_count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
@@ -185,6 +191,8 @@ object GraphCC extends App with LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
+        require(config.min_shared_kmers <= config.max_shared_kmers)
+
         val conf = new SparkConf().setAppName("Spark Graph CC")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 

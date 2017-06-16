@@ -16,7 +16,7 @@ import sext._
 object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
-                    k: Int = 31, format: String = "seq", sleep: Int = 0, canonical_kmer: Boolean = false,
+                    k: Int = -1, format: String = "seq", sleep: Int = 0, canonical_kmer: Boolean = false,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
                     use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2, //redis config, to be removed
                     user_kvstore: Boolean = false, kvstore_ip_ports: Array[(String, Int)] = null,
@@ -98,7 +98,7 @@ object KmerCounting extends App with LazyLogging {
         .text("use bloomer filter")
 
 
-      opt[Int]('k', "kmer_length").action((x, c) =>
+      opt[Int]('k', "kmer_length").required().action((x, c) =>
         c.copy(k = x)).
         validate(x =>
           if (x >= 11) success

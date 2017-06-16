@@ -7,15 +7,14 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
-import org.jgi.spark.localcluster.{DNASeq, SingleEdge, Utils}
-import org.jgi.spark.localcluster.myredis._
+import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton, _}
+import org.jgi.spark.localcluster.{SingleEdge, Utils}
 import sext._
 
-object GraphGen  extends App with  LazyLogging {
+object GraphGen extends App with LazyLogging {
 
   case class Config(kmer_reads: String = "", output: String = "",
-                    n_iteration: Int = 1, k: Int = -1, min_shared_kmers: Int = 2, sleep: Int = 0,
+                    n_iteration: Int = 1, min_shared_kmers: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
                     use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2,
                     use_bloom_filter: Boolean = false)
@@ -31,13 +30,6 @@ object GraphGen  extends App with  LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output of the top k-mers")
 
-      opt[Int]('k', "kmer_length").required().action((x, c) =>
-        c.copy(k = x)).
-        validate(x =>
-          if (x >= 11) success
-          else failure("k is too small, should not be smaller than 11"))
-        .text("length of k-mer")
-
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
@@ -45,9 +37,16 @@ object GraphGen  extends App with  LazyLogging {
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
         validate(x =>
-          if (x >= 2) success
-          else failure("min_shared_kmers should be greater than 2"))
+          if (x >= 1) success
+          else failure("min_shared_kmers should be greater than 1"))
         .text("minimum number of kmers that two reads share")
+
+      opt[Int]("max_shared_kmers").action((x, c) =>
+        c.copy(max_shared_kmers = x)).
+        validate(x =>
+          if (x >= 1) success
+          else failure("max_shared_kmers should be greater than 1"))
+        .text("max number of kmers that two reads share")
 
 
       opt[Int]('n', "n_partition").action((x, c) =>
@@ -96,7 +95,7 @@ object GraphGen  extends App with  LazyLogging {
         Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
     }.map(x => (x(0), x(1)))).flatMap(x => x)
 
-    val rdd = edges.map(x=>(x,1)).reduceByKey(_ + _).filter(x => x._2 >= config.min_shared_kmers)
+    val rdd = edges.map(x => (x, 1)).reduceByKey(_ + _).filter(x => x._2 >= config.min_shared_kmers)
       .map(x => (x._1._1.toInt, x._1._2.toInt, x._2.toInt))
 
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
@@ -145,8 +144,8 @@ object GraphGen  extends App with  LazyLogging {
     val results = (if (config.use_bloom_filter)
       sc.edgeCountFromRedisWithBloomFilter(cluster.redisSlots)
     else
-      sc.edgeCountFromRedis(cluster.redisSlots).filter(x => x._2 >= config.min_shared_kmers)
-      ).filter(x => x._2 >= config.min_shared_kmers).map(x => (x._1.src, x._1.dest, x._2))
+      sc.edgeCountFromRedis(cluster.redisSlots)
+      ).filter(x => x._2 >= config.min_shared_kmers && x._2 <= config.max_shared_kmers).map(x => (x._1.src, x._1.dest, x._2))
     results.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logger.info(s"iteration $i, #records ${results.count}")
     results
@@ -203,12 +202,12 @@ object GraphGen  extends App with  LazyLogging {
       logger.info(s"total #records=${rdd.count} save results to hdfs ${config.output}")
 
       //cleanup
-	try {
-      kmer_reads.unpersist()
-      rdds.foreach(_.unpersist())
-	}catch {
-	case  e:Exception => e.printStackTrace()
-	}
+      try {
+        kmer_reads.unpersist()
+        rdds.foreach(_.unpersist())
+      } catch {
+        case e: Exception => e.printStackTrace()
+      }
     }
 
 
@@ -226,6 +225,7 @@ object GraphGen  extends App with  LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
+        require(config.min_shared_kmers <= config.max_shared_kmers)
         val conf = new SparkConf().setAppName("Spark Graph Gen")
         //conf.registerKryoClasses(Array(classOf[DNASeq])) //don't know why kryo cannot find the class
 
