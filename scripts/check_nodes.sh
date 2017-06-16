@@ -21,3 +21,10 @@ check_node() { ## ksh style works in bash
 check_node genomics-ecs1
 check_node genomics-ecs2
 check_node genomics-ecs3
+check_node genomics-ecs4
+check_node genomics-ecs5
+check_node genomics-ecs6
+check_node genomics-ecs7
+check_node genomics-ecs8
+check_node genomics-ecs9
+check_node genomics-ecs10
