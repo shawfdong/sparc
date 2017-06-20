@@ -27,6 +27,37 @@ class KmerMapReadsSpec extends FlatSpec with Matchers with BeforeAndAfter with S
     //Thread.sleep(1000 * 10000)
   }
 
+  "kmer mapping" should "work on the test seq files without using bloomfilter" in {
+    val cfg = KmerMapReads.parse_command_line(
+      "--reads test/small -p sample.seq --kmer test/kmercounting_test.txt -k 31 --without_bloomfilter  -o tmp/kmermapping_seq_test_wobf.txt --n_iteration 1".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    KmerMapReads.run(cfg, sc)
+    //Thread.sleep(1000 * 10000)
+  }
+
+  "kmer mapping" should "work on the test seq files with canonical_kmer" in {
+    val cfg = KmerMapReads.parse_command_line(
+      "--reads test/small -p sample.seq --kmer test/kmercounting_test_C.txt -C -k 31  -o tmp/kmermapping_seq_test_C.txt --n_iteration 1".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    KmerMapReads.run(cfg, sc)
+    //Thread.sleep(1000 * 10000)
+  }
+
+  "kmer mapping" should "work on the test seq files without bloomfilter but with canonical_kmer" in {
+    val cfg = KmerMapReads.parse_command_line(
+      "--reads test/small -p sample.seq --kmer test/kmercounting_test_C.txt -C -k 31 --without_bloomfilter -o tmp/kmermapping_seq_test_wobf_C.txt --n_iteration 1".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    KmerMapReads.run(cfg, sc)
+    //Thread.sleep(1000 * 10000)
+  }
+
+  /*******/
   "kmer mapping" should "work on the test seq files with mulitple N" in {
     val cfg = KmerMapReads.parse_command_line(
       "--reads test/small -p sample2.seq --format seq --kmer test/kmercounting_sample2.txt -k 31  -o tmp/kmermapping_seq_sample2.txt --n_iteration 1".split(" ")

@@ -18,7 +18,7 @@ object KmerMapReads extends App with LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
-                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false,
+                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false, without_bloomfilter: Boolean = false,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -47,6 +47,9 @@ object KmerMapReads extends App with LazyLogging {
 
       opt[Unit]('C', "canonical_kmer").action((_, c) =>
         c.copy(canonical_kmer = true)).text("apply canonical kmer")
+
+      opt[Unit]("without_bloomfilter").action((_, c) =>
+        c.copy(without_bloomfilter = true)).text("do not use bloomfilter")
 
       opt[Double]('c', "contamination").action((x, c) =>
         c.copy(_contamination = x)).
@@ -106,7 +109,8 @@ object KmerMapReads extends App with LazyLogging {
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
-    val kmersB = sc.broadcast(kmers)
+
+    val kmersB = if (config.without_bloomfilter) null else sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
     logger.info("iteration %d, broadcaset %d topN kmers".format(i, kmersTopNB.value.size))
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
@@ -118,7 +122,7 @@ object KmerMapReads extends App with LazyLogging {
             kmer_gen_fun(seq)
               .filter { x =>
                 (Utils.pos_mod(x.hashCode, config.n_iteration) == 0) &&
-                  (kmersB.value.contains(x.bytes)) &&
+                  (if (config.without_bloomfilter) true else kmersB.value.contains(x.bytes)) &&
                   (!kmersTopNB.value.contains(x))
               }
               .distinct.map(s => (s, Set(id)))
@@ -134,9 +138,9 @@ object KmerMapReads extends App with LazyLogging {
     }
 
     filteredKmersRDD.persist(StorageLevel.MEMORY_AND_DISK)
-    logger.info(s"Finish Iteration $i with count ${filteredKmersRDD.count}")
+    logger.info(s"Finish Iteration $i with filtered count ${filteredKmersRDD.count}")
 
-    kmersB.destroy()
+    if (kmersB != null) kmersB.destroy()
     kmersTopNB.destroy()
     filteredKmersRDD
 
@@ -204,28 +208,18 @@ object KmerMapReads extends App with LazyLogging {
 
   }
 
-  private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long) = {
+  private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long, topN: Long) = {
     val n_kmer_group = math.max(takeN / 300e6 + 1, 1).toInt
     logger.info(s"need reduce $n_kmer_group for $takeN kmers.")
-    if (false) {
-      val kmer_bloomfilter = kmers.filter(u => u._2 < takeN).map(_._1).repartition(n_kmer_group)
-        .mapPartitions { iter =>
-          val bf = new GuavaBytesBloomFilter(takeN, 0.05)
-          iter.foreach(i => bf.add(i.bytes))
-          Iterator(bf)
-        }.treeReduce(_ | _, 2)
-      kmer_bloomfilter
-    } else {
-      val bf = new GuavaBytesBloomFilter(takeN, 0.05)
-      (0 until n_kmer_group).foreach {
-        i =>
-          val local_kmers = kmers.filter(u => u._2 < takeN).filter(u => u._2 % n_kmer_group == i)
-            .map(_._1.bytes).collect
-          logger.info(s"Receive ${local_kmers.length} kmers for group $i")
-          local_kmers.foreach(kmer => bf.add(kmer))
-      }
-      bf
+    val bf = new GuavaBytesBloomFilter(takeN, 0.05)
+    (0 until n_kmer_group).foreach {
+      i =>
+        val local_kmers = kmers.filter(u => u._2 > topN).filter(u => u._2 % n_kmer_group == i)
+          .map(_._1.bytes).collect
+        logger.info(s"Receive ${local_kmers.length} kmers for group $i")
+        local_kmers.foreach(kmer => bf.add(kmer))
     }
+    bf
   }
 
   def run(config: Config, sc: SparkContext): Unit = {
@@ -248,8 +242,8 @@ object KmerMapReads extends App with LazyLogging {
     val topN = (n_kmers * config._contamination).toLong
     val takeN = (n_kmers - topN).toLong
 
-    val topNKmers = kmers.filter(u => u._2 >= takeN).map(_._1).collect
-    val kmer_bloomfilter = make_bloomfilter(kmers, takeN)
+    val topNKmers = kmers.filter(u => u._2 <= topN).map(_._1).collect
+    val kmer_bloomfilter = make_bloomfilter(kmers, topN = topN, takeN = takeN)
 
 
     println("loaded %d kmers".format(n_kmers))
