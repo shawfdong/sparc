@@ -1,7 +1,20 @@
-INPUT=data/5G.seq
-OUTPUT=tmp/5G_kc_seq
+. `dirname $0`/config
+OUTPUT=tmp/${PREFIX}_kc_seq
 WAIT=1
-TARGET=target/scala-2.11/LocalCluster-assembly-0.1.jar 
+OPTS=-C
 
-nohup /home/spark/software/spark/bin/spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 20G  --executor-cores 2   --conf spark.network.timeout=360000 --conf spark.default.parallelism=3600 --conf spark.executor.extraClassPath=$TARGET --conf spark.speculation=false --conf spark.speculation.multiplier=2 --conf spark.eventLog.enabled=true $TARGET \
-KmerCounting --wait $WAIT  -i $INPUT  -o $OUTPUT  --format seq --contamination 0.00005  &
+CMD=`cat <<EOF 
+$SPARK_SUBMIT --master $MASTER --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 20G  --executor-cores 2   --conf spark.network.timeout=360000 --conf spark.default.parallelism=$PL --conf spark.executor.extraClassPath=$TARGET --conf spark.speculation=false --conf spark.speculation.multiplier=2 --conf spark.eventLog.enabled=$ENABLE_LOG $TARGET \
+KmerCounting --wait $WAIT  -i $INPUT  -o $OUTPUT  --format seq -k $K $OPTS  
+EOF
+`
+echo $CMD
+
+if [ $# -gt 0 ]
+  then
+     nohup $CMD &
+     echo "submitted"
+else
+     echo "dry-run, not runing"
+fi
+

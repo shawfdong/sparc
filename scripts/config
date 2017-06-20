@@ -1,0 +1,22 @@
+PREFIX=pacbio4G
+INPUT=data/${PREFIX}.seq 
+PL=1500
+ENABLE_LOG=true
+
+k=21
+min_kmer_count=2
+max_kmer_count=500
+min_shared_kmers=70
+max_shared_kmers=20000
+min_reads_per_cluster=2
+
+K=$k
+CL=0.0296 #for k=21 c=0.005
+#CL=0.038 #for k=31 c=0.005
+#CL=0.001
+
+
+TARGET=target/scala-2.11/LocalCluster-assembly-0.1.jar 
+SPARK_SUBMIT=$HOME/software/spark/bin/spark-submit
+MASTER=spark://genomics-ecs1:7077
+
