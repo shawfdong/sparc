@@ -37,6 +37,8 @@ class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyL
   def cc: Seq[(Long, Long)] = {
     val coo_row = new uintVector()
     val coo_col = new uintVector()
+    val t0 = System.currentTimeMillis / 1000.0
+
     edges.foreach {
       x =>
         coo_row.add(node_mapping(x._1))
@@ -45,7 +47,12 @@ class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyL
         coo_row.add(node_mapping(x._2))
         coo_col.add(node_mapping(x._1))
     }
+
     val n_edges = coo_row.size.toInt
+
+    val t1 = System.currentTimeMillis / 1000.0
+    logger.info(f"making coo vectors takes ${t1 - t0}%.4f seconds")
+
 
     val original_threads = net.jligra.ligra.getWorkers
     if (n_thread > 0) {
@@ -55,7 +62,8 @@ class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyL
       logger.info(s"OPENMP uses $original_threads threads")
     }
 
-    val t1 = System.currentTimeMillis / 1000.0
+
+
     //6, coo_row.size(), coo_row, coo_col,
     val graph = net.jligra.ligra.create_asymmetric_graph_from_coo(n_nodes, n_edges, coo_row, coo_col, System.getProperty("java.io.tmpdir"))
     val t2 = System.currentTimeMillis / 1000.0
