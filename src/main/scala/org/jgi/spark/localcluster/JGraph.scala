@@ -11,7 +11,8 @@ import scala.collection.GenMap
 
 class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyLogging {
   net.jligra.Info.load_native()
-  val use_pal = false
+  val use_pal = true
+  logger.info(s"Use pal: $use_pal")
   var node_mapping: GenMap[Long, Int] with Immutable = {
     val t1 = System.currentTimeMillis / 1000.0
 
