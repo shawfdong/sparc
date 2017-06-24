@@ -38,14 +38,25 @@ class JGraph(val edges: Iterable[(Long, Long)],val n_thread:Int) extends LazyLog
     } else {
       logger.info(s"OPENMP uses $original_threads threads")
     }
+
+    val t1 = System.currentTimeMillis/1000.0
     //6, coo_row.size(), coo_row, coo_col,
     val graph = net.jligra.ligra.create_asymmetric_graph_from_coo(n_nodes, n_edges, coo_row, coo_col, System.getProperty("java.io.tmpdir"))
+    val t2 = System.currentTimeMillis/1000.0
+    logger.info(f"creating graph takes ${t2-t1}%.4f seconds")
+
     val cc = net.jligra.ligra.connected_components(graph)
+    val t3 = System.currentTimeMillis/1000.0
+    logger.info(f"cc takes ${t3-t2}%.4f seconds")
+
     net.jligra.ligra.setWorkers(original_threads)
 
     val node_map = (0 until n_nodes.toInt).map(x => (x, cc.get(x))).toMap
 
     val clusters = node_mapping.map(x => (x._1, node_map(x._2))).map(x => (x._1, invmap(x._2))).toSeq //(rawv, rawc)
+    val t4 = System.currentTimeMillis/1000.0
+    logger.info(f"edge mapping takes ${t4-t3}%.4f seconds")
+
     clusters
   }
 }
