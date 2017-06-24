@@ -11,7 +11,7 @@ import org.jgi.spark.localcluster.{DNASeq, JGraph, Utils}
 import sext._
 
 
-object GraphCC2 extends App with LazyLogging {
+object GraphCC3 extends App with LazyLogging {
 
   override def main(args: Array[String]) {
 
@@ -99,14 +99,7 @@ object GraphCC2 extends App with LazyLogging {
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
 
-    val vertex_groups = {
-      val n = config.n_iteration
-      val a = (0 to n).map(x => math.sqrt(x.toDouble / n))
-        .map(x => (x * n).toInt)
-      (a.take(a.length - 1), a.tail).zipped.toSet.toList.filter(x => x._1 < x._2).sorted.reverse
-    }.toArray
-    val str_groups = vertex_groups.map(x => s"(${x._1},${x._2})").mkString(",")
-    logger.info(s"request ${config.n_iteration} iterations. truly get ${str_groups} groups")
+    val vertex_groups = config.n_iteration
 
     val edges =
       sc.textFile(config.edge_file).
@@ -119,7 +112,7 @@ object GraphCC2 extends App with LazyLogging {
     logger.info("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)
 
-    val _clusters_list = process_iterations(vertex_groups, edges, config, sc)
+    val _clusters_list = process_iterations(edges, config, sc)
     _clusters_list.map {
       u =>
         (u._1, u._2, u._3.length)
@@ -158,7 +151,7 @@ object GraphCC2 extends App with LazyLogging {
     //edges.unpersist()
   }
 
-  private def process_iterations(groups: Array[(Int, Int)], edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Seq[(Long, Long)])]
+  private def process_iterations(  edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Seq[(Long, Long)])]
   = {
     val n = config.n_iteration
 
@@ -168,11 +161,11 @@ object GraphCC2 extends App with LazyLogging {
         if (x(0) < x(1)) (x(0), x(1)) else (x(1), x(0))
     }.map {
       x =>
-        val a = Utils.pos_mod(x._1.toInt, n)
-        (get_index(a, groups), x)
+        val a =          Utils.pos_mod((x._1+x._2).toInt, n)
+        (a, x)
     }
 
-    var vetexGroupRDD = vertexTuple.groupByKey().repartition(groups.length)
+    var vetexGroupRDD = vertexTuple.groupByKey().repartition(n)
     vetexGroupRDD.map {
       case (group, group_edges) =>
         (group, group_edges.size)
@@ -199,14 +192,6 @@ object GraphCC2 extends App with LazyLogging {
     retRDD
   }
 
-  private def get_index(x: Int, groups: Array[(Int, Int)]): Int = {
-    groups.indices.foreach {
-      i =>
-        val group = groups(i)
-        if (x >= group._1 && x < group._2) return i
-    }
-    0
-  }
 
   def merge_cc(clusters: RDD[(Long, Long)] /*(v,c)*/
                , raw_edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Long, Long)] = {

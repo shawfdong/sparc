@@ -140,7 +140,7 @@ object GraphCC extends App with LazyLogging {
         }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
 
     edges.cache()
-    println("loaded %d edges".format(edges.count))
+    logger.info("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)
 
     val clusters_list = vertex_groups.indices.map {
