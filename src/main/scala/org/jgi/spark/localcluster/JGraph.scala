@@ -11,7 +11,7 @@ import scala.collection.GenMap
 
 class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyLogging {
   net.jligra.Info.load_native()
-  val use_pal = true
+  val use_pal = false
   var node_mapping: GenMap[Long, Int] with Immutable = {
     val t1 = System.currentTimeMillis / 1000.0
 
@@ -84,7 +84,7 @@ class JGraph(val edges: Iterable[(Long, Long)], val n_thread: Int) extends LazyL
     }
 
     val clusters = {
-      node_mapping.map(x => (x._1, node_map(x._2))).map(x => (x._1, invmap(x._2))).toSeq
+      node_mapping.map(x => (x._1,  invmap(node_map(x._2)))).toSeq
     } //(rawv, rawc)
     val t4 = System.currentTimeMillis / 1000.0
     logger.info(f"edge mapping takes ${t4 - t3}%.4f seconds")
