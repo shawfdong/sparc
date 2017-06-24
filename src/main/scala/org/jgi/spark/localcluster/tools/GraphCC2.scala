@@ -13,9 +13,29 @@ import sext._
 
 object GraphCC2 extends App with LazyLogging {
 
-  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1,min_shared_kmers: Int = 2,
-                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10, sleep: Int = 0,
-                    scratch_dir: String = "/tmp")
+  override def main(args: Array[String]) {
+
+    val options = parse_command_line(args)
+
+    options match {
+      case Some(_) =>
+        val config = options.get
+
+        logger.info(s"called with arguments\n${options.valueTreeString}")
+        require(config.min_shared_kmers <= config.max_shared_kmers)
+
+        val conf = new SparkConf().setAppName("Spark Graph CC2")
+        conf.registerKryoClasses(Array(classOf[DNASeq]))
+
+        val sc = new SparkContext(conf)
+        run(config, sc)
+        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
+        sc.stop()
+      case None =>
+        println("bad arguments")
+        sys.exit(-1)
+    }
+  } //main
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("GraphCC2") {
@@ -57,6 +77,13 @@ object GraphCC2 extends App with LazyLogging {
         c.copy(min_reads_per_cluster = x))
         .text("minimum reads per cluster")
 
+      opt[Int]("max_shared_kmers").action((x, c) =>
+        c.copy(max_shared_kmers = x)).
+        validate(x =>
+          if (x >= 1) success
+          else failure("max_shared_kmers should be greater than 1"))
+        .text("max number of kmers that two reads share")
+
       opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
         c.copy(scratch_dir = x)).text("where the intermediate results are")
 
@@ -65,64 +92,6 @@ object GraphCC2 extends App with LazyLogging {
 
     }
     parser.parse(args, Config())
-  }
-
-
-  private def get_index(x: Int, groups: Array[(Int, Int)]): Int = {
-    groups.indices.foreach {
-      i =>
-        val group = groups(i)
-        if (x >= group._1 && x < group._2) return i
-    }
-    return 0
-  }
-
-  private def process_iterations(groups: Array[(Int, Int)], edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[Seq[(Long, Long)]] = {
-    val n = config.n_iteration
-
-
-    val vertexTuple = edges.map {
-      x =>
-        if (x(0) < x(1)) (x(0), x(1)) else (x(1), x(0))
-    }.map {
-      x =>
-        val a = Utils.pos_mod(x._1.toInt, n)
-        (get_index(a, groups), x)
-    }
-
-    var vetexGroupRDD = vertexTuple.groupByKey().repartition(groups.length)
-
-    val retRDD=vetexGroupRDD.map {
-      x =>
-        if (x._2.size > 0) {
-          val group = x._1
-          val group_edges=x._2
-          logger.info(s"processing group $group")
-          val g = new JGraph(group_edges, n_thread = config.n_thread)
-          val clusters = g.cc
-          clusters
-        } else {
-          Seq.empty[(Long, Long)]
-        }
-    }
-    retRDD.persist(StorageLevel.MEMORY_AND_DISK_SER);
-    retRDD
-  }
-
-
-  def merge_cc(clusters: RDD[(Long, Long)] /*(v,c)*/
-               , raw_edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Long, Long)] = {
-    val edges = raw_edges.map {
-      x => (x(0), x(1)) //(v,v)
-    }
-    val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2).distinct.collect //(c,c)
-    val graph = new JGraph(new_edges)
-
-    val cc = sc.parallelize(graph.cc)
-    val new_clusters = cc.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
-      join(clusters.map(_.swap)).map(_._2) //(x,v)
-
-    new_clusters
   }
 
   def run(config: Config, sc: SparkContext): Unit = {
@@ -143,15 +112,22 @@ object GraphCC2 extends App with LazyLogging {
       sc.textFile(config.edge_file).
         map { line =>
           line.split(",").map(_.toLong)
-        }.filter(x=>x(2)>=config.min_shared_kmers).map(_.take(2))
+        }.filter(x => x(2) >= config.min_shared_kmers).map(_.take(2))
 
     edges.cache()
 
     println("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)
 
-    val clusters_list = process_iterations(vertex_groups, edges, config, sc)
-
+    val _clusters_list = process_iterations(vertex_groups, edges, config, sc)
+    _clusters_list.map {
+      u =>
+        (u._1, u._2, u._3.length)
+    }.collect.foreach {
+      u =>
+        logger.info(s"processed group ${u._1} of ${u._2} edges resulting in ${u._3} cc's")
+    }
+    val clusters_list = _clusters_list.map(_._3)
 
     val final_clusters = if (clusters_list.count > 1) {
       val clusters = clusters_list.flatMap(x => x)
@@ -165,8 +141,10 @@ object GraphCC2 extends App with LazyLogging {
 
     KmerCounting.delete_hdfs_file(config.output)
 
-    val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
-      .map(_.mkString(",")).coalesce(18,shuffle=false)
+    val result = final_clusters.groupByKey
+      .filter(u => u._2.size >= config.min_reads_per_cluster
+        && u._2.size <= config.max_shared_kmers).map(_._2.toList.sorted)
+      .map(_.mkString(",")).coalesce(18, shuffle = false)
 
     result.saveAsTextFile(config.output)
     logger.info(s"total #records=${result.count} save results to ${config.output}")
@@ -175,30 +153,79 @@ object GraphCC2 extends App with LazyLogging {
     logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
 
     //clean up
-    clusters_list.unpersist()
-    edges.unpersist()
+    // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
+    //edges.unpersist()
   }
 
+  private def process_iterations(groups: Array[(Int, Int)], edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Int, Int, Seq[(Long, Long)])]
+  = {
+    val n = config.n_iteration
 
-  override def main(args: Array[String]) {
 
-    val options = parse_command_line(args)
-
-    options match {
-      case Some(_) =>
-        val config = options.get
-
-        logger.info(s"called with arguments\n${options.valueTreeString}")
-        val conf = new SparkConf().setAppName("Spark Graph CC2")
-        conf.registerKryoClasses(Array(classOf[DNASeq]))
-
-        val sc = new SparkContext(conf)
-        run(config, sc)
-        if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
-        sc.stop()
-      case None =>
-        println("bad arguments")
-        sys.exit(-1)
+    val vertexTuple = edges.map {
+      x =>
+        if (x(0) < x(1)) (x(0), x(1)) else (x(1), x(0))
+    }.map {
+      x =>
+        val a = Utils.pos_mod(x._1.toInt, n)
+        (get_index(a, groups), x)
     }
-  } //main
+
+    var vetexGroupRDD = vertexTuple.groupByKey().repartition(groups.length)
+    vetexGroupRDD.map {
+      case (group, group_edges) =>
+        (group, group_edges.size)
+    }.collect.foreach {
+      u =>
+        logger.info(s"Group ${u._1} which has ${u._2} edges")
+    }
+    val retRDD = vetexGroupRDD.map {
+      x =>
+        if (x._2.nonEmpty) {
+          val group = x._1
+          val group_edges = x._2
+          //logger.info(s"processing group $group which has ${group_edges.size} edges")
+          val g = new JGraph(group_edges, n_thread = config.n_thread)
+          val clusters = g.cc
+          //logger.info(s"processed group $group of ${group_edges.size} edges resulting in ${clusters.length} edges")
+          (group, group_edges.size, clusters)
+        } else {
+          (0, 0, Seq.empty[(Long, Long)])
+        }
+    }
+    retRDD.persist(StorageLevel.MEMORY_AND_DISK_SER)
+
+    retRDD
+  }
+
+  private def get_index(x: Int, groups: Array[(Int, Int)]): Int = {
+    groups.indices.foreach {
+      i =>
+        val group = groups(i)
+        if (x >= group._1 && x < group._2) return i
+    }
+    0
+  }
+
+  def merge_cc(clusters: RDD[(Long, Long)] /*(v,c)*/
+               , raw_edges: RDD[Array[Long]], config: Config, sc: SparkContext): RDD[(Long, Long)] = {
+    val edges = raw_edges.map {
+      x => (x(0), x(1)) //(v,v)
+    }
+    val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2).distinct.collect //(c,c)
+    logger.info(s"merge ${new_edges.length} edges")
+    val graph = new JGraph(new_edges)
+    var local_cc = graph.cc
+    logger.info(s"merge ${new_edges.length} edges resulting in ${local_cc.length} cc")
+    val cc = sc.parallelize(local_cc)
+    val new_clusters = cc.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
+      join(clusters.map(_.swap)).map(_._2) //(x,v)
+
+    new_clusters
+  }
+
+  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1, min_shared_kmers: Int = 2,
+                    n_iteration: Int = 1, min_reads_per_cluster: Int = 10, max_shared_kmers: Int = 20000, sleep: Int = 0,
+                    scratch_dir: String = "/tmp")
+
 }
