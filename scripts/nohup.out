@@ -1,0 +1,49 @@
+[I 16:13:37.207 NotebookApp] Serving notebooks from local directory: /home/spark/localcluster/scripts
+[I 16:13:37.207 NotebookApp] 0 active kernels 
+[I 16:13:37.207 NotebookApp] The Jupyter Notebook is running at: http://localhost:8888/
+[I 16:13:37.207 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 16:13:55.531 NotebookApp] received signal 15, stopping
+[I 16:13:55.532 NotebookApp] Shutting down kernels
+[I 16:14:17.608 NotebookApp] Serving notebooks from local directory: /home/spark/localcluster/scripts
+[I 16:14:17.608 NotebookApp] 0 active kernels 
+[I 16:14:17.608 NotebookApp] The Jupyter Notebook is running at: http://genomics-ecs1:8888/
+[I 16:14:17.608 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[I 16:14:32.115 NotebookApp] 302 POST /login?next=%2Ftree%3F (192.168.0.11) 1.67ms
+[I 16:20:23.463 NotebookApp] Creating new notebook in 
+[I 16:20:23.470 NotebookApp] Writing notebook-signing key to /home/spark/.local/share/jupyter/notebook_secret
+[I 16:20:41.182 NotebookApp] Kernel started: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 16:22:41.263 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:24:41.390 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:26:41.529 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:28:41.394 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:30:17.860 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:30:41.257 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:32:41.691 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:33:03.073 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:36:41.396 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:38:41.542 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:40:41.649 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:42:41.416 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:44:41.268 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:44:51.305 NotebookApp] Kernel interrupted: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 16:45:43.163 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:46:41.710 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:47:05.777 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:47:07.029 NotebookApp] Kernel interrupted: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 16:47:35.459 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:50:41.405 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:52:41.418 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:54:41.408 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:54:49.368 NotebookApp] Kernel interrupted: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 16:55:55.799 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:56:41.407 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:56:52.083 NotebookApp] Saving file at /Untitled.ipynb
+[I 16:59:16.198 NotebookApp] Saving file at /Untitled.ipynb
+[I 17:16:41.782 NotebookApp] Saving file at /Untitled.ipynb
+[I 17:18:41.696 NotebookApp] Saving file at /Untitled.ipynb
+[I 17:24:42.193 NotebookApp] Saving file at /Untitled.ipynb
+[I 17:28:53.682 NotebookApp] Kernel restarted: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 17:30:03.206 NotebookApp] Kernel shutdown: 7abcfe8f-b855-4180-bd91-e039b2c5760f
+[I 03:18:05.808 NotebookApp] 302 GET /login?next=%2Ftree%3F (192.168.0.11) 0.79ms
+[I 03:18:13.952 NotebookApp] Kernel started: 575f7371-9461-4c96-895e-180acfa57ead
+[I 03:18:33.722 NotebookApp] Kernel shutdown: 575f7371-9461-4c96-895e-180acfa57ead

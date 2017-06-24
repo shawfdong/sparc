@@ -243,7 +243,7 @@ object KmerMapReads extends App with LazyLogging {
     val takeN = (n_kmers - topN).toLong
 
     val topNKmers = kmers.filter(u => u._2 <= topN).map(_._1).collect
-    val kmer_bloomfilter = make_bloomfilter(kmers, topN = topN, takeN = takeN)
+    val kmer_bloomfilter = if (config.without_bloomfilter) null else make_bloomfilter(kmers, topN = topN, takeN = takeN)
 
 
     println("loaded %d kmers".format(n_kmers))
