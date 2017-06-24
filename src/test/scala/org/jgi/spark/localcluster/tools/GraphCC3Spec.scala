@@ -29,7 +29,7 @@ class GraphCC3Spec extends FlatSpec with Matchers with BeforeAndAfter with Share
 
   "GraphCC3" should "work on the test seq files with multiple iterations" in {
     val cfg = GraphCC3.parse_command_line(
-      "-i test/graph_gen_test.txt   -o tmp/graph_cc3_iter3.txt --n_iteration 3 --min_reads_per_cluster 0".split(" ")
+      "-i test/graph_gen_test.txt   -o tmp/graph_cc3_iter3.txt --n_iteration 3 --min_reads_per_cluster 0 --min_shared_kmers 1".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 

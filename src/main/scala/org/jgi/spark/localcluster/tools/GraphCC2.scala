@@ -122,7 +122,7 @@ object GraphCC2 extends App with LazyLogging {
     val _clusters_list = process_iterations(vertex_groups, edges, config, sc)
     _clusters_list.map {
       u =>
-        (u._1, u._2, u._3.length)
+        (u._1, u._2, u._3.map(_._2).toSet.size)
     }.collect.foreach {
       u =>
         logger.info(s"processed group ${u._1} of ${u._2} edges resulting in ${u._3} cc's")
@@ -188,6 +188,7 @@ object GraphCC2 extends App with LazyLogging {
           //logger.info(s"processing group $group which has ${group_edges.size} edges")
           val g = new JGraph(group_edges, n_thread = config.n_thread)
           val clusters = g.cc
+
           //logger.info(s"processed group $group of ${group_edges.size} edges resulting in ${clusters.length} edges")
           (group, group_edges.size, clusters)
         } else {
@@ -217,7 +218,7 @@ object GraphCC2 extends App with LazyLogging {
     logger.info(s"merge ${new_edges.length} edges")
     val graph = new JGraph(new_edges)
     var local_cc = graph.cc
-    logger.info(s"merge ${new_edges.length} edges resulting in ${local_cc.length} cc")
+    logger.info(s"merge ${new_edges.length} edges resulting in ${local_cc.map(_._2).toSet.size} cc")
     val cc = sc.parallelize(local_cc)
     val new_clusters = cc.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
       join(clusters.map(_.swap)).map(_._2) //(x,v)
@@ -225,7 +226,7 @@ object GraphCC2 extends App with LazyLogging {
     new_clusters
   }
 
-  case class Config(edge_file: String = "", output: String = "", n_thread: Int = 1, min_shared_kmers: Int = 2,
+  case class Config(edge_file: String = "", output: String = "", n_thread: Int = -1, min_shared_kmers: Int = 2,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 10, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp")
 
