@@ -105,7 +105,7 @@ object GraphCC3 extends App with LazyLogging {
       sc.textFile(config.edge_file).
         map { line =>
           line.split(",").map(_.toLong)
-        }.filter(x => x(2) >= config.min_shared_kmers).map(_.take(2))
+        }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
 
     edges.cache()
 
@@ -135,8 +135,7 @@ object GraphCC3 extends App with LazyLogging {
     KmerCounting.delete_hdfs_file(config.output)
 
     val result = final_clusters.groupByKey
-      .filter(u => u._2.size >= config.min_reads_per_cluster
-        && u._2.size <= config.max_shared_kmers).map(_._2.toList.sorted)
+      .filter(u => u._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
       .map(_.mkString(",")).coalesce(18, shuffle = false)
 
     result.saveAsTextFile(config.output)
