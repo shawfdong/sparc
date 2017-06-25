@@ -4,22 +4,26 @@
 package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.SparkConf
 import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
 
 object GraphCC extends App with LazyLogging {
 
+
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                    scratch_dir: String = "/tmp", n_partition: Int = 0, use_graphframes: Boolean = false)
+
+  val APPNAME = "GraphCC"
 
   def parse_command_line(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config]("GraphCC") {
+    val parser = new scopt.OptionParser[Config](APPNAME) {
       head("GraphCC", Utils.VERSION)
 
       opt[String]('i', "edge_file").required().valueName("<file>").action((x, c) =>
@@ -36,6 +40,8 @@ object GraphCC extends App with LazyLogging {
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
 
+      opt[Unit]("use_graphframes").action((x, c) =>
+        c.copy(use_graphframes = true))
 
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
@@ -73,9 +79,39 @@ object GraphCC extends App with LazyLogging {
   }
 
 
-  private def process_iteration(i: Int, group: (Int, Int), edges: RDD[Array[Long]], config: Config) = {
+  def cc(edgeTuples: RDD[(Long, Long)], config: Config, sqlContext: SQLContext) = {
+    if (config.use_graphframes)
+      cc_graphframes(edgeTuples, sqlContext)
+    else
+      cc_mllib(edgeTuples)
+
+  }
+
+  def cc_mllib(edgeTuples: RDD[(Long, Long)]) = {
+    val graph = Graph.fromEdgeTuples(
+      edgeTuples, 1
+    )
+    val cc = graph.connectedComponents()
+    val clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong))
+    clusters
+  }
+
+  def cc_graphframes(edgeTuples: RDD[(Long, Long)], sqlContext: SQLContext) = {
+    import org.graphframes.GraphFrame
+    val edges = sqlContext.createDataFrame(edgeTuples.map {
+      case (src, dst) =>
+        (src, dst, 1)
+    }).toDF("src", "dst", "cnt")
+    val graph = GraphFrame.fromEdges(edges)
+
+    val cc = graph.connectedComponents.run()
+    val clusters = cc.select("id", "component").rdd.map(x => (x(0).asInstanceOf[Long], x(1).asInstanceOf[Long]))
+    clusters
+  }
+
+  private def process_iteration(i: Int, group: (Int, Int), edges: RDD[Array[Long]], config: Config, sqlContext: SQLContext) = {
     val n = config.n_iteration
-    val vertexTuple = edges.map {
+    val edgeTuples = edges.map {
       x =>
         if (x(0) < x(1)) (x(0), x(1)) else (x(1), x(0))
     }.filter { x =>
@@ -83,18 +119,11 @@ object GraphCC extends App with LazyLogging {
       a >= group._1 && a < group._2
     }
 
-    logger.info(s"group $group loaded ${vertexTuple.count} edges")
+    logger.info(s"group $group loaded ${edgeTuples.count} edges")
 
-
-    val graph = Graph.fromEdgeTuples(
-      vertexTuple, 1
-    )
-    val cc = graph.connectedComponents()
-    val clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong))
-
+    val clusters = this.cc(edgeTuples, config, sqlContext)
 
     logger.info(s"Iteration $i ,#records=${clusters.count} are persisted")
-
 
     clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     clusters
@@ -102,21 +131,22 @@ object GraphCC extends App with LazyLogging {
 
 
   def merge_cc(clusters: RDD[(Long, Long)] /*(v,c)*/
-               , raw_edges: RDD[Array[Long]], config: Config): RDD[(Long, Long)] = {
+               , raw_edges: RDD[Array[Long]], config: Config, sqlContext: SQLContext): RDD[(Long, Long)] = {
     val edges = raw_edges.map {
       x => (x(0), x(1)) //(v,v)
     }
     val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2) //(c,c)
 
-    val graph = Graph.fromEdgeTuples(new_edges, 1)
-    val cc = graph.connectedComponents()
-    val new_clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong)). //(c,x)
+    val new_clusters = cc(new_edges, config, sqlContext = sqlContext). //(c,x)
       join(clusters.map(_.swap)).map(_._2) //(x,v)
 
     new_clusters
   }
 
-  def run(config: Config, sc: SparkContext): Long = {
+  def run(config: Config, spark: SparkSession): Long = {
+
+    val sc = spark.sparkContext
+    var sqlContext = spark.sqlContext
 
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
@@ -128,7 +158,6 @@ object GraphCC extends App with LazyLogging {
       (a.take(a.length - 1), a.tail).zipped.toSet.toList.filter(x => x._1 < x._2).sorted.reverse
     }
     logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
-
 
     val edges =
       (if (config.n_partition > 0)
@@ -145,7 +174,7 @@ object GraphCC extends App with LazyLogging {
 
     val clusters_list = vertex_groups.indices.map {
       i =>
-        process_iteration(i, vertex_groups(i), edges, config)
+        process_iteration(i, vertex_groups(i), edges, config, sqlContext)
     }
 
 
@@ -153,7 +182,7 @@ object GraphCC extends App with LazyLogging {
       val clusters = sc.union(clusters_list)
         .groupByKey.map(x => (x._1, x._2.min))
 
-      merge_cc(clusters, edges, config)
+      merge_cc(clusters, edges, config, sqlContext)
     }
     else {
       clusters_list(0).map(_.swap)
@@ -193,13 +222,17 @@ object GraphCC extends App with LazyLogging {
         logger.info(s"called with arguments\n${options.valueTreeString}")
         require(config.min_shared_kmers <= config.max_shared_kmers)
 
-        val conf = new SparkConf().setAppName("Spark Graph CC")
+        val conf = new SparkConf().setAppName(APPNAME)
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 
-        val sc = new SparkContext(conf)
-        run(config, sc)
+        val spark = SparkSession
+          .builder().config(conf)
+          .appName(APPNAME)
+          .getOrCreate()
+
+        run(config, spark)
         if (config.sleep > 0) Thread.sleep(config.sleep * 1000)
-        sc.stop()
+        spark.stop()
       case None =>
         println("bad arguments")
         sys.exit(-1)

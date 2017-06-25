@@ -62,6 +62,7 @@ libraryDependencies ++= Seq(
 
   "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.7.3" % "provided",
   "org.apache.hadoop" % "hadoop-common" % "2.7.3" % "provided",
+  "org.apache.spark" %% "spark-hive"       % "2.0.1" % "provided",
 
   "org.slf4j" % "slf4j-simple" % "1.7.21" % "provided",
   "org.slf4j" % "slf4j-api" % "1.7.21" % "provided",
@@ -77,7 +78,9 @@ libraryDependencies ++= Seq(
 PB.targets in Compile := Seq(
   scalapb.gen(grpc = true, flatPackage = true) -> (sourceManaged in Compile).value
 )
+
 spIgnoreProvided := true
+//spDependencies += "graphframes/graphframes:0.5.0-spark2.0-s_2.11"
 
 assemblyMergeStrategy in assembly := {
   case PathList("javax", "servlet", xs@_*) => MergeStrategy.first
