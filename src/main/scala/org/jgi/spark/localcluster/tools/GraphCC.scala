@@ -20,10 +20,8 @@ object GraphCC extends App with LazyLogging {
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0, use_graphframes: Boolean = false)
 
-  val APPNAME = "GraphCC"
-
   def parse_command_line(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config](APPNAME) {
+    val parser = new scopt.OptionParser[Config]("GraphCC") {
       head("GraphCC", Utils.VERSION)
 
       opt[String]('i', "edge_file").required().valueName("<file>").action((x, c) =>
@@ -148,6 +146,8 @@ object GraphCC extends App with LazyLogging {
     val sc = spark.sparkContext
     var sqlContext = spark.sqlContext
 
+    sc.setCheckpointDir(System.getProperty("java.io.tmpdir"))
+
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
 
@@ -212,6 +212,7 @@ object GraphCC extends App with LazyLogging {
 
 
   override def main(args: Array[String]) {
+    val APPNAME = "GraphCC"
 
     val options = parse_command_line(args)
 
