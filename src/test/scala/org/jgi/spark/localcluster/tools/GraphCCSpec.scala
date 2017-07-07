@@ -19,7 +19,7 @@ class GraphCCSpec extends FlatSpec with Matchers with BeforeAndAfter with DataFr
 
   "GraphCC" should "work on the test seq files" in {
     val cfg = GraphCC.parse_command_line(
-      "-i test/graph_gen_test.txt   -o tmp/graphx_cc.txt --n_iteration 3 --min_reads_per_cluster 0".split(" ")
+      "-i test/graph_gen_test.txt   -o tmp/graphx_cc.txt --n_iteration 1 --min_reads_per_cluster 0".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 
@@ -29,7 +29,7 @@ class GraphCCSpec extends FlatSpec with Matchers with BeforeAndAfter with DataFr
 
   "GraphCC" should "work on the test seq files and use GraphFrames" in {
     val cfg = GraphCC.parse_command_line(
-      "-i test/graph_gen_test.txt   -o tmp/graphframe_cc.txt --n_iteration 3 --min_reads_per_cluster 0 --use_graphframes".split(" ")
+      "-i test/graph_gen_test.txt   -o tmp/graphframe_cc.txt --n_iteration 1 --min_reads_per_cluster 0 --use_graphframes".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 

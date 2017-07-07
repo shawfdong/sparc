@@ -9,6 +9,7 @@ import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import org.graphframes.GraphFrame
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
@@ -17,6 +18,7 @@ object GraphCC extends App with LazyLogging {
 
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
+                    top_nodes_ratio: Double = 0.1, big_cluster_threshold: Double = 0.2,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0, use_graphframes: Boolean = false)
 
@@ -33,6 +35,14 @@ object GraphCC extends App with LazyLogging {
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions for the input")
+
+      opt[Double]("top_nodes_ratio").action((x, c) =>
+        c.copy(top_nodes_ratio = x))
+        .text("within a big cluster, top-degree nodes will be removed to re-cluster. This ratio determines how many nodes are removed. ")
+
+      opt[Double]("big_cluster_threshold").action((x, c) =>
+        c.copy(big_cluster_threshold = x))
+        .text("Define big cluster. A cluster whose size > #reads*big_cluster_threshold is big")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
@@ -95,7 +105,6 @@ object GraphCC extends App with LazyLogging {
   }
 
   def cc_graphframes(edgeTuples: RDD[(Long, Long)], sqlContext: SQLContext) = {
-    import org.graphframes.GraphFrame
     val edges = sqlContext.createDataFrame(edgeTuples.map {
       case (src, dst) =>
         (src, dst, 1)
@@ -117,11 +126,11 @@ object GraphCC extends App with LazyLogging {
       a >= group._1 && a < group._2
     }
 
-    logger.info(s"group $group loaded ${edgeTuples.count} edges")
+    logInfo(s"group $group loaded ${edgeTuples.count} edges")
 
     val clusters = this.cc(edgeTuples, config, sqlContext)
 
-    logger.info(s"Iteration $i ,#records=${clusters.count} are persisted")
+    logInfo(s"Iteration $i ,#records=${clusters.count} are persisted")
 
     clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     clusters
@@ -141,15 +150,114 @@ object GraphCC extends App with LazyLogging {
     new_clusters
   }
 
+
+  protected def run_cc_with_nodes(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
+                                  nodes: Set[Long] = null) = {
+
+    val edges =
+      if (nodes == null) {
+        all_edges
+      } else {
+        val filtered_edges = all_edges.filter {
+          u =>
+            u.forall(i => nodes.contains(i))
+        }.cache()
+        val val_counts = filtered_edges.flatMap(x => x).map(u => (u, 1)).reduceByKey(_ + _).sortBy(_._2, ascending = false)
+        //val_counts.collect.foreach(println)
+        val n_nodes = val_counts.count()
+        val threshold: Double = math.max(1, n_nodes.toDouble * config.top_nodes_ratio)
+        val top_nodes = if (false) {
+          val_counts.take(threshold.toInt).map(_._1).toSet
+        } else {
+          val top_degree = val_counts.take(threshold.toInt).reverse.head._2
+          val_counts.filter(u => u._2 >= top_degree).map(_._1).collect.toSet
+        }
+
+        val this_edges =
+          filtered_edges.filter {
+            u =>
+              u.forall(i => !top_nodes.contains(i))
+          }.persist(StorageLevel.MEMORY_AND_DISK)
+
+        logInfo(s"Filtered ${threshold.toInt}[${top_nodes.size}] nodes out of ${n_nodes} noodes with top ratio ${config.top_nodes_ratio} ")
+        filtered_edges.unpersist(blocking = false)
+        filtered_edges.filter {
+          u =>
+            u.forall(i => !top_nodes.contains(i))
+        }
+      }
+
+    val sc = spark.sparkContext
+    val sqlContext = spark.sqlContext
+
+    val clusters_list = vertex_groups.indices.map {
+      i =>
+        process_iteration(i, vertex_groups(i), edges, config, sqlContext)
+    }
+
+
+    val final_clusters = (if (clusters_list.length > 1) {
+      val clusters = sc.union(clusters_list)
+        .groupByKey.map(x => (x._1, x._2.min))
+
+      merge_cc(clusters, edges, config, sqlContext)
+    }
+    else {
+      clusters_list(0).map(_.swap)
+    }).groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(u => (u._1, u._2.toSeq))
+    final_clusters.persist(StorageLevel.MEMORY_AND_DISK)
+    logInfo(s"Got ${final_clusters.count} clusters from ${if (nodes == null) null else nodes.size} nodes")
+    //clean up
+    clusters_list.foreach {
+      _.unpersist(blocking = false)
+    }
+    if (nodes != null) {
+      edges.unpersist(blocking = false)
+    }
+
+    final_clusters
+  }
+
+  def logInfo(str: String) = {
+    logger.info(str)
+    println("AAAA " + str)
+  }
+
+  protected def run_cc_with_big_cluster(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config,
+                                        spark: SparkSession, big_cluster: Set[Long], n_reads: Long): RDD[(Long, Seq[Long])] = {
+    val cluster_list = collection.mutable.ListBuffer.empty[RDD[(Long, Seq[Long])]]
+    val clusters = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster)
+    val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold).persist(StorageLevel.MEMORY_AND_DISK)
+    cluster_list.append(small_clusters)
+    val big_clusters = clusters.filter(_._2.length / n_reads.toDouble >= config.big_cluster_threshold).zipWithIndex().persist(StorageLevel.MEMORY_AND_DISK)
+    val n_big = big_clusters.count.toInt
+    logInfo(s"Got ${small_clusters.count} small clusters and ${n_big} big clusters")
+
+    (0 until n_big).foreach {
+      i =>
+        val a_cluster = big_clusters.filter(_._2 == i).map(_._1._2).collect()
+        require(a_cluster.length == 1)
+        val nodes = a_cluster(0).toSet
+        val this_clusters = run_cc_with_big_cluster(vertex_groups, all_edges, config, spark, big_cluster = nodes, n_reads = n_reads)
+        cluster_list.append(this_clusters)
+    }
+    big_clusters.unpersist(blocking = false)
+    spark.sparkContext.union(cluster_list)
+  }
+
+  protected def run_cc(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config, spark: SparkSession, n_reads: Long): RDD[(Long, Seq[Long])] = {
+    run_cc_with_big_cluster(vertex_groups, all_edges, config, spark, big_cluster = null, n_reads = n_reads)
+  }
+
   def run(config: Config, spark: SparkSession): Long = {
 
     val sc = spark.sparkContext
-    var sqlContext = spark.sqlContext
+    val sqlContext = spark.sqlContext
 
     sc.setCheckpointDir(System.getProperty("java.io.tmpdir"))
 
     val start = System.currentTimeMillis
-    logger.info(new java.util.Date(start) + ": Program started ...")
+    logInfo(new java.util.Date(start) + ": Program started ...")
 
     val vertex_groups = {
       val n = config.n_iteration
@@ -157,7 +265,7 @@ object GraphCC extends App with LazyLogging {
         .map(x => (x * n).toInt)
       (a.take(a.length - 1), a.tail).zipped.toSet.toList.filter(x => x._1 < x._2).sorted.reverse
     }
-    logger.info(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
+    logInfo(s"request ${config.n_iteration} iterations. truly get $vertex_groups groups")
 
     val edges =
       (if (config.n_partition > 0)
@@ -169,44 +277,28 @@ object GraphCC extends App with LazyLogging {
         }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
 
     edges.cache()
-    logger.info("loaded %d edges".format(edges.count))
+    logInfo("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)
 
-    val clusters_list = vertex_groups.indices.map {
-      i =>
-        process_iteration(i, vertex_groups(i), edges, config, sqlContext)
-    }
-
-
-    val final_clusters = if (clusters_list.length > 1) {
-      val clusters = sc.union(clusters_list)
-        .groupByKey.map(x => (x._1, x._2.min))
-
-      merge_cc(clusters, edges, config, sqlContext)
-    }
-    else {
-      clusters_list(0).map(_.swap)
-    }
-
+    val n_reads = edges.flatMap(x => x).distinct().count()
+    logInfo(s"biggest cluster will have ${(n_reads*config.big_cluster_threshold).toInt} nodes. In worst case big cluster will iterately be reduced by ${math.ceil(n_reads*config.big_cluster_threshold*config.top_nodes_ratio).toInt}")
+    val final_clusters = run_cc(vertex_groups, edges, config, spark, n_reads)
     KmerCounting.delete_hdfs_file(config.output)
 
-    val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
+    val result = final_clusters.map(_._2.toList.sorted)
       .map(_.mkString(",")).coalesce(18, shuffle = false)
 
     result.saveAsTextFile(config.output)
     val result_count = result.count
-    logger.info(s"total #records=${result_count} save results to ${config.output}")
+    logInfo(s"total #records=${result_count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
-    logger.info("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+    logInfo("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
 
     // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
     //edges.unpersist()
 
-    //clean up
-    clusters_list.foreach {
-      _.unpersist()
-    }
+
     result_count
   }
 
@@ -220,7 +312,7 @@ object GraphCC extends App with LazyLogging {
       case Some(_) =>
         val config = options.get
 
-        logger.info(s"called with arguments\n${options.valueTreeString}")
+        logInfo(s"called with arguments\n${options.valueTreeString}")
         require(config.min_shared_kmers <= config.max_shared_kmers)
 
         val conf = new SparkConf().setAppName(APPNAME)
