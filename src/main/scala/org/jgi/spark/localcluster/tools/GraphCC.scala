@@ -120,10 +120,10 @@ object GraphCC extends App with LazyLogging {
     logger.info(s"group $group loaded ${edgeTuples.count} edges")
 
     val clusters = this.cc(edgeTuples, config, sqlContext)
+    clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
 
     logger.info(s"Iteration $i ,#records=${clusters.count} are persisted")
 
-    clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     clusters
   }
 
@@ -191,7 +191,7 @@ object GraphCC extends App with LazyLogging {
     KmerCounting.delete_hdfs_file(config.output)
 
     val result = final_clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(_._2.toList.sorted)
-      .map(_.mkString(",")).coalesce(18, shuffle = false)
+      .map(_.mkString(","))//.repartition(180 )
 
     result.saveAsTextFile(config.output)
     val result_count = result.count
