@@ -1,20 +1,22 @@
-PREFIX=11G
+#PREFIX=pacbio4G
+PREFIX=50G
 INPUT=data/${PREFIX}.seq 
-PL=1500
-ENABLE_LOG=true
+PL=8000
+ENABLE_LOG=false
 
 k=31
 min_kmer_count=2
 max_kmer_count=500
-min_shared_kmers=60
+min_shared_kmers=5
 max_shared_kmers=20000
 min_reads_per_cluster=2
 
 K=$k
-#CL=0.0119 #for k=16 c=0.005
-#CL=0.0296 #for k=21 c=0.005
-#CL=0.038 #for k=31 c=0.005
-CL=0.001
+#CL=0.0119 #for k=16 c=0.005 pac
+#CL=0.0476 #for k=16 c=0.02 pac
+#CL=0.0296 #for k=21 c=0.005 pac
+#CL=0.038 #for k=31 c=0.005 pac
+CL=0.0038 #for k=31 c=0.001 cow
 
 
 TARGET=target/scala-2.11/LocalCluster-assembly-0.1.jar 
