@@ -130,9 +130,9 @@ object GraphCC extends App with LazyLogging {
 
     val clusters = this.cc(edgeTuples, config, sqlContext)
 
+    clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logInfo(s"Iteration $i ,#records=${clusters.count} are persisted")
 
-    clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     clusters
   }
 
