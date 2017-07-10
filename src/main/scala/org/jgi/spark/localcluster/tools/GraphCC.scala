@@ -3,6 +3,8 @@
   */
 package org.jgi.spark.localcluster.tools
 
+import java.util.UUID
+
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.SparkConf
 import org.apache.spark.graphx.Graph
@@ -18,7 +20,7 @@ object GraphCC extends App with LazyLogging {
 
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
-                    top_nodes_ratio: Double = 0.1, big_cluster_threshold: Double = 0.2,
+                    top_nodes_ratio: Double = 0.1, big_cluster_threshold: Double = 0.2, n_output_blocks: Int = 180,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0, use_graphframes: Boolean = false)
 
@@ -47,6 +49,14 @@ object GraphCC extends App with LazyLogging {
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+
+      opt[Int]("n_output_blocks").action((x, c) =>
+        c.copy(n_output_blocks = x)).
+        validate(x =>
+          if (x >= 1) success
+          else failure("n_output_blocks should be greater than 0"))
+        .text("output block number")
+
 
       opt[Unit]("use_graphframes").action((x, c) =>
         c.copy(use_graphframes = true))
@@ -222,15 +232,27 @@ object GraphCC extends App with LazyLogging {
     println("AAAA " + str)
   }
 
+
+  def saveRDD(rdd: RDD[(Long, Seq[Long])], n_partition: Int): String = {
+    val tmpdir = System.getProperty("java.io.tmpdir")
+    val filename = s"$tmpdir/cc/${UUID.randomUUID().toString}"
+    rdd.repartition(n_partition).saveAsObjectFile(filename)
+    filename
+  }
+
   protected def run_cc_with_big_cluster(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config,
-                                        spark: SparkSession, big_cluster: Set[Long], n_reads: Long): RDD[(Long, Seq[Long])] = {
-    val cluster_list = collection.mutable.ListBuffer.empty[RDD[(Long, Seq[Long])]]
-    val clusters = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster)
-    val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold).persist(StorageLevel.MEMORY_AND_DISK)
-    cluster_list.append(small_clusters)
+                                        spark: SparkSession, big_cluster: Set[Long], n_reads: Long): List[String] = {
+    val cluster_list = collection.mutable.ListBuffer.empty[String]
+
+    val clusters = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster).persist(StorageLevel.MEMORY_AND_DISK)
+
+    val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold)
+    cluster_list.append(saveRDD(small_clusters, config.n_output_blocks))
+
     val big_clusters = clusters.filter(_._2.length / n_reads.toDouble >= config.big_cluster_threshold).zipWithIndex().persist(StorageLevel.MEMORY_AND_DISK)
     val n_big = big_clusters.count.toInt
     logInfo(s"Got ${small_clusters.count} small clusters and ${n_big} big clusters")
+    clusters.unpersist(blocking = false)
 
     (0 until n_big).foreach {
       i =>
@@ -238,14 +260,18 @@ object GraphCC extends App with LazyLogging {
         require(a_cluster.length == 1)
         val nodes = a_cluster(0).toSet
         val this_clusters = run_cc_with_big_cluster(vertex_groups, all_edges, config, spark, big_cluster = nodes, n_reads = n_reads)
-        cluster_list.append(this_clusters)
+        cluster_list ++= this_clusters
     }
     big_clusters.unpersist(blocking = false)
-    spark.sparkContext.union(cluster_list)
+
+    cluster_list.toList
   }
 
-  protected def run_cc(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config, spark: SparkSession, n_reads: Long): RDD[(Long, Seq[Long])] = {
-    run_cc_with_big_cluster(vertex_groups, all_edges, config, spark, big_cluster = null, n_reads = n_reads)
+  protected def run_cc(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
+                       n_reads: Long): (List[String], RDD[(Long, Seq[Long])]) = {
+    val files = run_cc_with_big_cluster(vertex_groups, all_edges, config, spark, big_cluster = null, n_reads = n_reads)
+    val sc = spark.sparkContext
+    (files, sc.union(files.map(sc.objectFile[(Long, Seq[Long])](_))))
   }
 
   def run(config: Config, spark: SparkSession): Long = {
@@ -280,23 +306,23 @@ object GraphCC extends App with LazyLogging {
     edges.take(5).map(_.mkString(",")).foreach(println)
 
     val n_reads = edges.flatMap(x => x).distinct().count()
-    logInfo(s"biggest cluster will have ${(n_reads*config.big_cluster_threshold).toInt} nodes. In worst case big cluster will iterately be reduced by ${math.ceil(n_reads*config.big_cluster_threshold*config.top_nodes_ratio).toInt}")
-    val final_clusters = run_cc(vertex_groups, edges, config, spark, n_reads)
+    logInfo(s"biggest cluster will have ${(n_reads * config.big_cluster_threshold).toInt} nodes (total $n_reads). In worst case big cluster will iterately be reduced by ${math.ceil(n_reads * config.big_cluster_threshold * config.top_nodes_ratio).toInt}")
+    val (files, final_clusters) = run_cc(vertex_groups, edges, config, spark, n_reads)
     KmerCounting.delete_hdfs_file(config.output)
 
     val result = final_clusters.map(_._2.toList.sorted)
       .map(_.mkString(","))
 
-    result.saveAsTextFile(config.output)
-    val result_count = result.count
+    result.repartition(config.n_output_blocks).saveAsTextFile(config.output)
+    val result_count = sc.textFile(config.output).count
     logInfo(s"total #records=${result_count} save results to ${config.output}")
 
     val totalTime1 = System.currentTimeMillis
     logInfo("Processing time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
 
     // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
-    //edges.unpersist()
-
+    edges.unpersist(blocking = false)
+    files.foreach(KmerCounting.delete_hdfs_file(_))
 
     result_count
   }
