@@ -6,11 +6,11 @@ package org.jgi.spark.localcluster.tools
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.spark.SparkConf
 import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.{SparkConf, SparkContext}
 import org.graphframes.GraphFrame
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
@@ -163,6 +163,7 @@ object GraphCC extends App with LazyLogging {
   protected def run_cc_with_nodes(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
                                   nodes: Set[Long] = null) = {
 
+    var top_nodes: Set[Long] = null
     val edges =
       if (nodes == null) {
         all_edges
@@ -175,7 +176,7 @@ object GraphCC extends App with LazyLogging {
         //val_counts.collect.foreach(println)
         val n_nodes = val_counts.count()
         val threshold: Double = math.max(1, n_nodes.toDouble * config.top_nodes_ratio)
-        val top_nodes = if (false) {
+        top_nodes = if (false) {
           val_counts.take(threshold.toInt).map(_._1).toSet
         } else {
           val top_degree = val_counts.take(threshold.toInt).reverse.head._2
@@ -224,7 +225,7 @@ object GraphCC extends App with LazyLogging {
       edges.unpersist(blocking = false)
     }
 
-    final_clusters
+    (final_clusters, top_nodes)
   }
 
   def logInfo(str: String) = {
@@ -240,12 +241,18 @@ object GraphCC extends App with LazyLogging {
     filename
   }
 
+  def saveTopNodes(topNodes: Set[Long], sc: SparkContext): String = {
+    val nodes = topNodes.toSeq
+    saveRDD(sc.parallelize(List((nodes.head, nodes))), 1)
+  }
+
   protected def run_cc_with_big_cluster(vertex_groups: List[(Int, Int)], all_edges: RDD[Array[Long]], config: Config,
                                         spark: SparkSession, big_cluster: Set[Long], n_reads: Long): List[String] = {
     val cluster_list = collection.mutable.ListBuffer.empty[String]
 
-    val clusters = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster).persist(StorageLevel.MEMORY_AND_DISK)
-
+    val (clusters, topNodes) = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster)
+    clusters.persist(StorageLevel.MEMORY_AND_DISK)
+    if (topNodes!=null) cluster_list.append(saveTopNodes(topNodes, spark.sparkContext))
     val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold)
     cluster_list.append(saveRDD(small_clusters, config.n_output_blocks))
 
