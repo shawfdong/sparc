@@ -3,7 +3,6 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import com.google.common.hash.GuavaBytesBloomFilter
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -106,11 +105,10 @@ object KmerMapReads extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
 
-    val kmersB = if (config.without_bloomfilter) null else sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
     logger.info("iteration %d, broadcaset %d topN kmers".format(i, kmersTopNB.value.size))
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
@@ -122,7 +120,6 @@ object KmerMapReads extends App with LazyLogging {
             kmer_gen_fun(seq)
               .filter { x =>
                 (Utils.pos_mod(x.hashCode, config.n_iteration) == 0) &&
-                  (if (config.without_bloomfilter) true else kmersB.value.contains(x.bytes)) &&
                   (!kmersTopNB.value.contains(x))
               }
               .distinct.map(s => (s, Set(id)))
@@ -140,7 +137,6 @@ object KmerMapReads extends App with LazyLogging {
     filteredKmersRDD.persist(StorageLevel.MEMORY_AND_DISK)
     logger.info(s"Finish Iteration $i with filtered count ${filteredKmersRDD.count}")
 
-    if (kmersB != null) kmersB.destroy()
     kmersTopNB.destroy()
     filteredKmersRDD
 
@@ -208,19 +204,6 @@ object KmerMapReads extends App with LazyLogging {
 
   }
 
-  private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long, topN: Long) = {
-    val n_kmer_group = math.max(takeN / 300e6 + 1, 1).toInt
-    logger.info(s"need reduce $n_kmer_group for $takeN kmers.")
-    val bf = new GuavaBytesBloomFilter(takeN, 0.05)
-    (0 until n_kmer_group).foreach {
-      i =>
-        val local_kmers = kmers.filter(u => u._2 > topN).filter(u => u._2 % n_kmer_group == i)
-          .map(_._1.bytes).collect
-        logger.info(s"Receive ${local_kmers.length} kmers for group $i")
-        local_kmers.foreach(kmer => bf.add(kmer))
-    }
-    bf
-  }
 
   def run(config: Config, sc: SparkContext): Unit = {
 
@@ -243,8 +226,6 @@ object KmerMapReads extends App with LazyLogging {
     val takeN = (n_kmers - topN).toLong
 
     val topNKmers = kmers.filter(u => u._2 <= topN).map(_._1).collect
-    val kmer_bloomfilter = if (config.without_bloomfilter) null else make_bloomfilter(kmers, topN = topN, takeN = takeN)
-
 
     println("loaded %d kmers".format(n_kmers))
 
@@ -252,7 +233,7 @@ object KmerMapReads extends App with LazyLogging {
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, readsRDD, kmer_bloomfilter, topNKmers, config, sc)
+        process_iteration(i, readsRDD, topNKmers, config, sc)
     }
 
     KmerCounting.delete_hdfs_file(config.output)

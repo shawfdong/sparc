@@ -7,8 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton, _}
-import org.jgi.spark.localcluster.{SingleEdge, Utils}
+import org.jgi.spark.localcluster.Utils
 import sext._
 
 object GraphGen extends App with LazyLogging {
@@ -16,7 +15,6 @@ object GraphGen extends App with LazyLogging {
   case class Config(kmer_reads: String = "", output: String = "",
                     n_iteration: Int = 1, min_shared_kmers: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0,
-                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2,
                     use_bloom_filter: Boolean = false)
 
 
@@ -60,20 +58,6 @@ object GraphGen extends App with LazyLogging {
           else failure("n should be positive"))
         .text("#iterations to finish the task. default 1. set a bigger value if resource is low.")
 
-      opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
-        val t = x.split(",").map {
-          u =>
-            if (Utils.parseIpPort(u)._2 < 1) 1 else 0
-        }.sum
-        if (t > 0)
-          failure("format is not correct")
-        else
-          success
-      }.action { (x, c) =>
-        val r = x.split(",").map(Utils.parseIpPort)
-        c.copy(redis_ip_ports = r, use_redis = true)
-      }.text("ip:port for redis servers. Only IP supported.")
-
       opt[Unit]("use_bloom_filter").action((x, c) =>
         c.copy(use_bloom_filter = true))
         .text("use bloomer filter. only applied to redis")
@@ -103,64 +87,9 @@ object GraphGen extends App with LazyLogging {
 
   }
 
-  def getJedisManager(config: Config): JedisManager = {
-    JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
-  }
-
-  private def process_iteration_redis(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
-    val THRESH_HOLD = 1024 * 32
-
-    kmer_reads.foreachPartition {
-      iterator =>
-        val buf = scala.collection.mutable.ArrayBuffer.empty[SingleEdge]
-        val cluster = getJedisManager(config)
-
-        def incr_fun(u: collection.Iterable[SingleEdge]) =
-          if (config.use_bloom_filter) cluster.bf_incr_edge_batch(u) else cluster.incr_edge_batch(u)
-
-        iterator.foreach {
-          lst =>
-            lst.combinations(2).map(x => x.sorted).filter {
-              case a =>
-                Utils.pos_mod((a(0) + a(1)).toInt, config.n_iteration) == i
-            }.map(x => new SingleEdge(x(0), x(1))).foreach(x => buf.append(x))
-            if (buf.length > THRESH_HOLD) {
-              incr_fun(buf)
-              buf.clear()
-            }
-        }
-
-        //remained
-        if (buf.nonEmpty) {
-          incr_fun(buf)
-          buf.clear()
-        }
-
-
-    }
-
-    val cluster = getJedisManager(config)
-    import org.jgi.spark.localcluster.rdd._
-    val results = (if (config.use_bloom_filter)
-      sc.edgeCountFromRedisWithBloomFilter(cluster.redisSlots)
-    else
-      sc.edgeCountFromRedis(cluster.redisSlots)
-      ).filter(x => x._2 >= config.min_shared_kmers && x._2 <= config.max_shared_kmers).map(x => (x._1.src, x._1.dest, x._2))
-    results.persist(StorageLevel.MEMORY_AND_DISK_SER)
-    logger.info(s"iteration $i, #records ${results.count}")
-    results
-  }
-
-  def flushAll(config: Config): Unit = {
-    val mgr = getJedisManager(config)
-    mgr.flushAll()
-  }
 
   private def process_iteration(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
-    if (config.use_redis)
-      process_iteration_redis(i, kmer_reads, config, sc)
-    else
-      process_iteration_spark(i, kmer_reads, config, sc)
+    process_iteration_spark(i, kmer_reads, config, sc)
   }
 
 
@@ -184,11 +113,9 @@ object GraphGen extends App with LazyLogging {
     logger.info("loaded %d kmer-reads-mapping".format(kmer_reads.count))
     kmer_reads.take(5).map(_.mkString(",")).foreach(x => logger.info(x))
 
-    if (config.use_redis) flushAll(config)
     val values = 0.until(config.n_iteration).map {
       i =>
         val r = process_iteration(i, kmer_reads, config, sc)
-        if (config.use_redis) flushAll(config)
         r
     }
 
