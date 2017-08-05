@@ -10,6 +10,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
 import org.jgi.spark.localcluster.kvstore.{KVStoreManager, KVStoreManagerSingleton}
 import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
+import org.jgi.spark.localcluster.tools.KmerMapReads2.logger
 import sext._
 
 
@@ -121,6 +122,11 @@ object KmerCounting extends App with LazyLogging {
 
     }
     parser.parse(args, Config())
+  }
+
+  def logInfo(str: String)={
+    println(str)
+    logger.info(str)
   }
 
   def delete_hdfs_file(filepath: String): Unit = {
@@ -240,7 +246,7 @@ object KmerCounting extends App with LazyLogging {
     rdd.persist(StorageLevel.MEMORY_AND_DISK_SER)
     val raw_count = smallKmersRDD.count
     val kmer_count = rdd.count
-    logger.info(s"filter out ${kmer_count} kmers (count>1) from total ${raw_count} kmers")
+    logInfo(s"filter out ${kmer_count} kmers (count>1) from total ${raw_count} kmers")
 
     (rdd, kmer_count)
   }
@@ -255,7 +261,7 @@ object KmerCounting extends App with LazyLogging {
   def run(config: Config, sc: SparkContext): Unit = {
 
     val start = System.currentTimeMillis
-    logger.info(new java.util.Date(start) + ": Program started ...")
+    logInfo(new java.util.Date(start) + ": Program started ...")
 
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
@@ -285,14 +291,14 @@ object KmerCounting extends App with LazyLogging {
         val kmer_count = values.map(_._2).sum
         val filteredKmerRDD = rdd.sortBy(x => (-x._2, x._1.hashCode)).map(x => x._1.to_base64 + " " + x._2.toString)
         filteredKmerRDD.saveAsTextFile(config.output)
-        logger.info(s"total #kmer=${kmer_count} save results to hdfs ${config.output}")
+        logInfo(s"total #kmer=${kmer_count} save results to hdfs ${config.output}")
       }
 
       //cleanup
       smallReadsRDD.unpersist()
       rdds.foreach(_.unpersist())
       val totalTime1 = System.currentTimeMillis
-      logger.info("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+      logInfo("kmer counting time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
     }
   }
 
@@ -308,7 +314,7 @@ object KmerCounting extends App with LazyLogging {
           logger.error("cannot use both redis and kvstore")
           sys.exit(-1)
         }
-        logger.info(s"called with arguments\n${options.valueTreeString}")
+        logInfo(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Counting")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
         val sc = new SparkContext(conf)
