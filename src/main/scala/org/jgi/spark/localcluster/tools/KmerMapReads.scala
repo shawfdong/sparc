@@ -106,13 +106,18 @@ object KmerMapReads extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
+  def logInfo(str: String) = {
+    println(str)
+    logger.info(str)
+  }
+
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], kmers: AbstractBloomFilter[Array[Byte]],
                                 topNKmers: Array[DNASeq],
                                 config: Config, sc: SparkContext) = {
 
     val kmersB = if (config.without_bloomfilter) null else sc.broadcast(kmers)
     val kmersTopNB = sc.broadcast(topNKmers.toSet)
-    logger.info("iteration %d, broadcaset %d topN kmers".format(i, kmersTopNB.value.size))
+    logInfo("iteration %d, broadcaset %d topN kmers".format(i, kmersTopNB.value.size))
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
 
     val kmersRDD = readsRDD.mapPartitions {
@@ -138,7 +143,7 @@ object KmerMapReads extends App with LazyLogging {
     }
 
     filteredKmersRDD.persist(StorageLevel.MEMORY_AND_DISK)
-    logger.info(s"Finish Iteration $i with filtered count ${filteredKmersRDD.count}")
+    logInfo(s"Finish Iteration $i with filtered count ${filteredKmersRDD.count}")
 
     if (kmersB != null) kmersB.destroy()
     kmersTopNB.destroy()
@@ -210,13 +215,13 @@ object KmerMapReads extends App with LazyLogging {
 
   private def make_bloomfilter(kmers: RDD[(DNASeq, Long)], takeN: Long, topN: Long) = {
     val n_kmer_group = math.max(takeN / 300e6 + 1, 1).toInt
-    logger.info(s"need reduce $n_kmer_group for $takeN kmers.")
+    logInfo(s"need reduce $n_kmer_group for $takeN kmers.")
     val bf = new GuavaBytesBloomFilter(takeN, 0.05)
     (0 until n_kmer_group).foreach {
       i =>
         val local_kmers = kmers.filter(u => u._2 > topN).filter(u => u._2 % n_kmer_group == i)
           .map(_._1.bytes).collect
-        logger.info(s"Receive ${local_kmers.length} kmers for group $i")
+        logInfo(s"Receive ${local_kmers.length} kmers for group $i")
         local_kmers.foreach(kmer => bf.add(kmer))
     }
     bf
@@ -225,7 +230,7 @@ object KmerMapReads extends App with LazyLogging {
   def run(config: Config, sc: SparkContext): Unit = {
 
     val start = System.currentTimeMillis
-    logger.info(new java.util.Date(start) + ": Program started ...")
+    logInfo(new java.util.Date(start) + ": Program started ...")
 
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
@@ -266,7 +271,7 @@ object KmerMapReads extends App with LazyLogging {
     readsRDD.unpersist()
 
     val totalTime1 = System.currentTimeMillis
-    logger.info("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
+    logInfo("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
   }
 
 
@@ -287,7 +292,7 @@ object KmerMapReads extends App with LazyLogging {
           sys.exit(-1)
         }
 
-        logger.info(s"called with arguments\n${options.valueTreeString}")
+        logInfo(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Map Reads").set("spark.kryoserializer.buffer.max", "512m")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 

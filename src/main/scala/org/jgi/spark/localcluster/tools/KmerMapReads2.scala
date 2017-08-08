@@ -5,7 +5,6 @@ package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
 import sext._
@@ -15,7 +14,7 @@ import scala.util.Random
 
 object KmerMapReads2 extends App with LazyLogging {
 
-  case class Config(reads_input: String = "", output: String = "", pattern: String = "",
+  case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
                     max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
@@ -27,6 +26,8 @@ object KmerMapReads2 extends App with LazyLogging {
       opt[String]("reads").required().valueName("<dir/file>").action((x, c) =>
         c.copy(reads_input = x)).text("a local dir where seq files are located in,  or a local file, or an hdfs file")
 
+      opt[String]("kmer").required().valueName("<file>").action((x, c) =>
+        c.copy(kmer_input = x)).text("Kmers to be keep. e.g. output from kmer counting ")
 
       opt[String]('p', "pattern").valueName("<pattern>").action((x, c) =>
         c.copy(pattern = x)).text("if input is a local dir, specify file patterns here. e.g. *.seq, 12??.seq")
@@ -101,18 +102,18 @@ object KmerMapReads2 extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  def logInfo(str: String)={
+  def logInfo(str: String) = {
     println(str)
     logger.info(str)
   }
 
-  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)],
-                                config: Config, sc: SparkContext) = {
 
+  private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], topNKmser: RDD[(DNASeq, Boolean)],
+                                config: Config, sc: SparkContext) = {
 
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
 
-    val kmersRDD = readsRDD.mapPartitions {
+    val kmer_reads = readsRDD.mapPartitions {
       iterator =>
         iterator.map {
           case (id, seq) =>
@@ -120,30 +121,43 @@ object KmerMapReads2 extends App with LazyLogging {
               .filter { x =>
                 (Utils.pos_mod(x.hashCode, config.n_iteration) == i)
               }
-              .distinct.map(s => (s, Set(id)))
+              .distinct.map(s => (s, Set(id).toSeq))
         }
-    }.flatMap(x => x).reduceByKey(_ ++ _).filter(u=>u._2.size>1)
-      .sortBy(u => (-u._2.size, u._1.hashCode))
-      .zipWithIndex().persist(StorageLevel.MEMORY_AND_DISK)
+    }.flatMap(x => x).reduceByKey(_ ++ _).map(u=>(u._1,u._2.toSeq)).filter(u => u._2.length >= config.min_kmer_count)
+      .leftOuterJoin(topNKmser).filter {
+      case (_, (_, opt)) =>
+        opt match {
+          case Some(x) => false
+          case None => true
+        }
+    }.map {
+      case (kmer, (reads, _)) =>
+        (kmer, if (reads.length <= config.max_kmer_count) reads else (Random.shuffle(reads).take(config.max_kmer_count)))
+    }.cache()
 
-    val n_kmers = kmersRDD.count
-    val Nth_idx = (n_kmers * config._contamination).toLong
 
-    logInfo(s"Generate ${n_kmers} kmers (#count>1) for iteration $i. Will drop ${Nth_idx} kmers.")
+    logInfo(s"Generate ${kmer_reads.count} kmers (#count>1 and topN kmer dropped) for iteration $i")
     //val Nth_size=kmersRDD.filter(u=>Nth_idx==u._2).first._1._2.size
     // subsampling very abundant k-mers that appear in many reads
     // remove very rare k-mers that appear only in one read: likely due to sequencing error
-    val filteredKmersRDD = kmersRDD.filter(u => u._2 >= Nth_idx).map(u => u._1).filter {
-      x => x._2.size >= config.min_kmer_count
-    }.map {
-      x => if (x._2.size <= config.max_kmer_count) x else (x._1, Random.shuffle(x._2).take(config.max_kmer_count))
-    }
+    kmer_reads
+  }
 
-    //filteredKmersRDD.persist(StorageLevel.MEMORY_AND_DISK)
-    logInfo(s"Finish Iteration $i with filtered count ${filteredKmersRDD.count}")
-    //kmersRDD.unpersist(blocking = false)
-    filteredKmersRDD
+  def get_topN_kmers(sc: SparkContext, config: Config): RDD[(DNASeq, Boolean)] = {
+    val _kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
+    _kmers.cache()
+    val n_kmers = _kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
 
+    val kmers = _kmers.zipWithIndex()
+
+    val topN = (n_kmers * config._contamination).toLong
+
+    val topNKmers = kmers.filter(u => u._2 <= topN).map(u => (u._1, true)).cache()
+
+    println("loaded %d kmer counts, take %d top kmers".format(n_kmers, topNKmers.count))
+
+    _kmers.unpersist()
+    topNKmers
   }
 
 
@@ -155,13 +169,15 @@ object KmerMapReads2 extends App with LazyLogging {
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
+    var topNKmser = get_topN_kmers(sc, config)
+
     val readsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
 
     val rdds = 0.until(config.n_iteration).map {
       i =>
-        process_iteration(i, readsRDD, config, sc)
+        process_iteration(i, readsRDD, topNKmser, config, sc)
     }
 
     KmerCounting.delete_hdfs_file(config.output)
@@ -171,8 +187,9 @@ object KmerMapReads2 extends App with LazyLogging {
       .saveAsTextFile(config.output)
 
     //clean up
-    rdds.foreach(_.unpersist())
-    readsRDD.unpersist()
+    rdds.foreach(_.unpersist(blocking = false))
+    readsRDD.unpersist(blocking = false)
+    topNKmser.unpersist(blocking = false)
 
     val totalTime1 = System.currentTimeMillis
     logInfo("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
