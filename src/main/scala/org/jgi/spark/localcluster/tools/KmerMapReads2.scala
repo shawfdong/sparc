@@ -6,6 +6,7 @@ package org.jgi.spark.localcluster.tools
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.storage.StorageLevel
 import org.jgi.spark.localcluster._
 import sext._
 
@@ -133,7 +134,8 @@ object KmerMapReads2 extends App with LazyLogging {
     }.map {
       case (kmer, (reads, _)) =>
         (kmer, if (reads.length <= config.max_kmer_count) reads else (Random.shuffle(reads).take(config.max_kmer_count)))
-    }.cache()
+    }.persist(StorageLevel.MEMORY_AND_DISK)
+
 
 
     logInfo(s"Generate ${kmer_reads.count} kmers (#count>1 and topN kmer dropped) for iteration $i")
@@ -152,7 +154,7 @@ object KmerMapReads2 extends App with LazyLogging {
 
     val topN = (n_kmers * config._contamination).toLong
 
-    val topNKmers = kmers.filter(u => u._2 <= topN).map(u => (u._1, true)).cache()
+    val topNKmers = kmers.filter(u => u._2 <= topN).map(u => (u._1, true)).persist(StorageLevel.MEMORY_AND_DISK)
 
     println("loaded %d kmer counts, take %d top kmers".format(n_kmers, topNKmers.count))
 
