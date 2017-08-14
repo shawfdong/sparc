@@ -135,6 +135,7 @@ object MyPregel extends Logging {
       g = g.joinVertices(messages)(vprog).persist(StorageLevel.MEMORY_AND_DISK)
 
       val oldMessages = messages
+      oldMessages.unpersist(blocking = false)
       // Send new messages, skipping edges where neither side received a message. We must cache
       // messages so it can be materialized on the next line, allowing us to uncache the previous
       // iteration.
@@ -148,7 +149,6 @@ object MyPregel extends Logging {
       logInfo("Pregel finished iteration " + i)
 
       // Unpersist the RDDs hidden by newly-materialized RDDs
-      oldMessages.unpersist(blocking = false)
       prevG.unpersistVertices(blocking = false)
       prevG.edges.unpersist(blocking = false)
       // count the iteration
