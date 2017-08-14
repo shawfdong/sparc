@@ -11,7 +11,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.graphframes.GraphFrame
 import org.apache.spark.graphx.{lib => graphxlib}
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
@@ -103,7 +102,7 @@ object GraphLPA2 extends App with LazyLogging {
       edgeTuples, 1
     )
 
-    val cc = graphxlib.LabelPropagation.run(graph,max_iteration)
+    val cc = graphxlib.MyLabelPropagation.run(graph,max_iteration)
     val clusters = cc.vertices.map(x => (x._1.toLong, x._2.toLong))
     clusters
   }
