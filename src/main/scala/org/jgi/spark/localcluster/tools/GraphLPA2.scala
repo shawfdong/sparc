@@ -3,14 +3,12 @@
   */
 package org.jgi.spark.localcluster.tools
 
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.spark.SparkConf
 import org.apache.spark.graphx.{Graph, lib => graphxlib}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
@@ -19,7 +17,7 @@ object GraphLPA2 extends App with LazyLogging {
 
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2, max_iteration: Int = 10,
-                    top_nodes_ratio: Double = 0.1, big_cluster_threshold: Double = 0.2, n_output_blocks: Int = 180,
+                    n_output_blocks: Int = 180,
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     scratch_dir: String = "/tmp", n_partition: Int = 0)
 
@@ -37,13 +35,6 @@ object GraphLPA2 extends App with LazyLogging {
         c.copy(n_partition = x))
         .text("paritions for the input")
 
-      opt[Double]("top_nodes_ratio").action((x, c) =>
-        c.copy(top_nodes_ratio = x))
-        .text("within a big cluster, top-degree nodes will be removed to re-cluster. This ratio determines how many nodes are removed. ")
-
-      opt[Double]("big_cluster_threshold").action((x, c) =>
-        c.copy(big_cluster_threshold = x))
-        .text("Define big cluster. A cluster whose size > #reads*big_cluster_threshold is big")
 
       opt[Int]("max_iteration").action((x, c) =>
         c.copy(max_iteration = x))
@@ -98,7 +89,7 @@ object GraphLPA2 extends App with LazyLogging {
 
   def cc_graphx(edgeTuples: RDD[(Long, Long)], sqlContext: SQLContext, max_iteration: Int) = {
     val graph = Graph.fromEdgeTuples(
-      edgeTuples, 1, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK
+      edgeTuples, 1.toInt, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK_SER, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK_SER
     )
 
     val cc = graphxlib.MyLabelPropagation.run(graph, max_iteration)
@@ -106,141 +97,33 @@ object GraphLPA2 extends App with LazyLogging {
     clusters
   }
 
-  private def process_iteration(edges: RDD[Array[Long]], config: Config, sqlContext: SQLContext) = {
-    val edgeTuples = edges.map {
+  def logInfo(str: String) = {
+    logger.info(str)
+    println("AAAA " + str)
+  }
+
+  protected def run_cc(all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
+                       n_reads: Long) = {
+    val sqlContext = spark.sqlContext
+
+    val edgeTuples = all_edges.map {
       x =>
         if (x(0) < x(1)) (x(0), x(1)) else (x(1), x(0))
     }
 
     logInfo(s"loaded ${edgeTuples.count} edges")
 
-    val clusters = this.cc(edgeTuples, config, sqlContext)
+    val clusters = this.cc(edgeTuples, config, sqlContext).map(_.swap)
     clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logInfo(s"#records=${clusters.count} are persisted")
 
-    clusters
-  }
-
-
-  def merge_cc(clusters: RDD[(Long, Long)] /*(v,c)*/
-               , raw_edges: RDD[Array[Long]], config: Config, sqlContext: SQLContext): RDD[(Long, Long)] = {
-    val edges = raw_edges.map {
-      x => (x(0), x(1)) //(v,v)
-    }
-    val new_edges = edges.join(clusters).map(x => x._2).join(clusters).map(x => x._2) //(c,c)
-
-    val new_clusters = cc(new_edges, config, sqlContext = sqlContext). //(c,x)
-      join(clusters.map(_.swap)).map(_._2) //(x,v)
-
-    new_clusters
-  }
-
-
-  protected def run_cc_with_nodes(all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
-                                  nodes: Set[Long] = null) = {
-
-    var top_nodes: Set[Long] = null
-    val edges =
-      if (nodes == null) {
-        all_edges
-      } else {
-        val filtered_edges = all_edges.filter {
-          u =>
-            u.forall(i => nodes.contains(i))
-        }.cache()
-        val val_counts = filtered_edges.flatMap(x => x).map(u => (u, 1)).reduceByKey(_ + _).sortBy(_._2, ascending = false)
-        //val_counts.collect.foreach(println)
-        val n_nodes = val_counts.count()
-        val threshold: Double = math.max(1, n_nodes.toDouble * config.top_nodes_ratio)
-        top_nodes = if (false) {
-          val_counts.take(threshold.toInt).map(_._1).toSet
-        } else {
-          val top_degree = val_counts.take(threshold.toInt).reverse.head._2
-          val_counts.filter(u => u._2 >= top_degree).map(_._1).collect.toSet
-        }
-
-        val this_edges =
-          filtered_edges.filter {
-            u =>
-              u.forall(i => !top_nodes.contains(i))
-          }.persist(StorageLevel.MEMORY_AND_DISK)
-
-        logInfo(s"Filtered ${threshold.toInt}[${top_nodes.size}] nodes out of ${n_nodes} noodes with top ratio ${config.top_nodes_ratio} ")
-        filtered_edges.unpersist(blocking = false)
-        filtered_edges.filter {
-          u =>
-            u.forall(i => !top_nodes.contains(i))
-        }
-      }
-
-    val sc = spark.sparkContext
-    val sqlContext = spark.sqlContext
-
     val final_clusters =
-      process_iteration(edges, config, sqlContext).map(_.swap)
-        .groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(u => (u._1, u._2.toSeq))
-    final_clusters.persist(StorageLevel.MEMORY_AND_DISK)
-    logInfo(s"Got ${final_clusters.count} clusters from ${if (nodes == null) null else nodes.size} nodes")
-    //clean up
-    final_clusters.unpersist(blocking = false)
-    if (nodes != null) {
-      edges.unpersist(blocking = false)
-    }
-
-    (final_clusters, top_nodes)
-  }
-
-  def logInfo(str: String) = {
-    logger.info(str)
-    println("AAAA " + str)
-  }
-
-
-  def saveRDD(rdd: RDD[(Long, Seq[Long])], n_partition: Int): String = {
-    val tmpdir = System.getProperty("java.io.tmpdir")
-    val filename = s"$tmpdir/cc/${UUID.randomUUID().toString}"
-    rdd.repartition(n_partition).saveAsObjectFile(filename)
-    filename
-  }
-
-  def saveTopNodes(topNodes: Set[Long], sc: SparkContext): String = {
-    val nodes = topNodes.toSeq
-    saveRDD(sc.parallelize(List((nodes.head, nodes))), 1)
-  }
-
-  protected def run_cc_with_big_cluster(all_edges: RDD[Array[Long]], config: Config,
-                                        spark: SparkSession, big_cluster: Set[Long], n_reads: Long): List[String] = {
-    val cluster_list = collection.mutable.ListBuffer.empty[String]
-
-    val (clusters, topNodes) = run_cc_with_nodes(all_edges, config, spark, nodes = big_cluster)
-    clusters.persist(StorageLevel.MEMORY_AND_DISK)
-    if (topNodes != null) cluster_list.append(saveTopNodes(topNodes, spark.sparkContext))
-    val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold)
-    cluster_list.append(saveRDD(small_clusters, config.n_output_blocks))
-
-    val big_clusters = clusters.filter(_._2.length / n_reads.toDouble >= config.big_cluster_threshold).zipWithIndex().persist(StorageLevel.MEMORY_AND_DISK)
-    val n_big = big_clusters.count.toInt
-    logInfo(s"Got ${small_clusters.count} small clusters and ${n_big} big clusters")
+      clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(u => (u._1, u._2.toSeq))
+    final_clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    logInfo(s"Got ${final_clusters.count} clusters")
     clusters.unpersist(blocking = false)
+    final_clusters
 
-    (0 until n_big).foreach {
-      i =>
-        val a_cluster = big_clusters.filter(_._2 == i).map(_._1._2).collect()
-        require(a_cluster.length == 1)
-        val nodes = a_cluster(0).toSet
-        val this_clusters = run_cc_with_big_cluster(all_edges, config, spark, big_cluster = nodes, n_reads = n_reads)
-        cluster_list ++= this_clusters
-    }
-    big_clusters.unpersist(blocking = false)
-
-    cluster_list.toList
-  }
-
-  protected def run_cc(all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
-                       n_reads: Long): (List[String], RDD[(Long, Seq[Long])]) = {
-    val files = run_cc_with_big_cluster(all_edges, config, spark, big_cluster = null, n_reads = n_reads)
-    val sc = spark.sparkContext
-    (files, sc.union(files.map(sc.objectFile[(Long, Seq[Long])](_))))
   }
 
   def run(config: Config, spark: SparkSession): Long = {
@@ -267,8 +150,8 @@ object GraphLPA2 extends App with LazyLogging {
     edges.take(5).map(_.mkString(",")).foreach(println)
 
     val n_reads = edges.flatMap(x => x).distinct().count()
-    logInfo(s"biggest cluster will have ${(n_reads * config.big_cluster_threshold).toInt} nodes (total $n_reads). In worst case big cluster will iterately be reduced by ${math.ceil(n_reads * config.big_cluster_threshold * config.top_nodes_ratio).toInt}")
-    val (files, final_clusters) = run_cc(edges, config, spark, n_reads)
+    logInfo(s"total #reads = $n_reads")
+    val final_clusters = run_cc(edges, config, spark, n_reads)
     KmerCounting.delete_hdfs_file(config.output)
 
     val result = final_clusters.map(_._2.toList.sorted)
@@ -283,14 +166,14 @@ object GraphLPA2 extends App with LazyLogging {
 
     // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
     edges.unpersist(blocking = false)
-    files.foreach(KmerCounting.delete_hdfs_file(_))
+    final_clusters.unpersist(blocking = false)
 
     result_count
   }
 
 
   override def main(args: Array[String]) {
-    val APPNAME = "GraphLPA"
+    val APPNAME = "GraphLPA2"
 
     val options = parse_command_line(args)
 
