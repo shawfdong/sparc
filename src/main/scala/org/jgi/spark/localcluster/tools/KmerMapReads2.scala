@@ -5,8 +5,8 @@ package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
 import sext._
 
@@ -51,7 +51,7 @@ object KmerMapReads2 extends App with LazyLogging {
       opt[Double]('c', "contamination").action((x, c) =>
         c.copy(_contamination = x)).
         validate(x =>
-          if (x > 0 && x <= 1) success
+          if (x >= 0 && x <= 1) success
           else failure("contamination should be positive and less than 1"))
         .text("the fraction of top k-mers to keep, others are removed likely due to contamination")
 
@@ -114,28 +114,41 @@ object KmerMapReads2 extends App with LazyLogging {
 
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
 
-    val kmer_reads = readsRDD.mapPartitions {
-      iterator =>
-        iterator.map {
-          case (id, seq) =>
-            kmer_gen_fun(seq)
-              .filter { x =>
-                (Utils.pos_mod(x.hashCode, config.n_iteration) == i)
-              }
-              .distinct.map(s => (s, Set(id).toSeq))
-        }
-    }.flatMap(x => x).reduceByKey(_ ++ _).map(u=>(u._1,u._2.toSeq)).filter(u => u._2.length >= config.min_kmer_count)
-      .leftOuterJoin(topNKmser).filter {
-      case (_, (_, opt)) =>
-        opt match {
-          case Some(x) => false
-          case None => true
-        }
-    }.map {
-      case (kmer, (reads, _)) =>
-        (kmer, if (reads.length <= config.max_kmer_count) reads else (Random.shuffle(reads).take(config.max_kmer_count)))
-    }.persist(StorageLevel.MEMORY_AND_DISK)
+    val kmer_reads = {
+      val kmer_reads_filtered = readsRDD.mapPartitions {
+        iterator =>
+          iterator.map {
+            case (id, seq) =>
+              kmer_gen_fun(seq)
+                .filter { x =>
+                  (Utils.pos_mod(x.hashCode, config.n_iteration) == i)
+                }
+                .distinct.map(s => (s, Set(id).toSeq))
+          }
+      }.flatMap(x => x).reduceByKey(_ ++ _).map(u => (u._1, u._2.toSeq)).filter(u => u._2.length >= config.min_kmer_count)
 
+      val kmer_reads_joined =
+        if (topNKmser == null) {
+          logInfo("no kmer filtered.")
+          kmer_reads_filtered
+        }
+        else {
+          kmer_reads_filtered.leftOuterJoin(topNKmser).filter {
+            case (_, (_, opt)) =>
+              opt match {
+                case Some(x) => false
+                case None => true
+              }
+          }.map {
+            case (kmer, (reads, _)) => (kmer, reads)
+          }
+        }
+
+      kmer_reads_joined.map {
+        case (kmer, reads) =>
+          (kmer, if (reads.length <= config.max_kmer_count) reads else (Random.shuffle(reads).take(config.max_kmer_count)))
+      }
+    }.persist(StorageLevel.MEMORY_AND_DISK)
 
 
     logInfo(s"Generate ${kmer_reads.count} kmers (#count>1 and topN kmer dropped) for iteration $i")
@@ -146,6 +159,8 @@ object KmerMapReads2 extends App with LazyLogging {
   }
 
   def get_topN_kmers(sc: SparkContext, config: Config): RDD[(DNASeq, Boolean)] = {
+    if (config._contamination <= 0) return null
+
     val _kmers = sc.textFile(config.kmer_input).map(_.split(" ").head.trim()).map(DNASeq.from_base64)
     _kmers.cache()
     val n_kmers = _kmers.count //all distinct kmer count (include len 1 kmern and top kmers)
@@ -191,7 +206,7 @@ object KmerMapReads2 extends App with LazyLogging {
     //clean up
     rdds.foreach(_.unpersist(blocking = false))
     readsRDD.unpersist(blocking = false)
-    topNKmser.unpersist(blocking = false)
+    if (topNKmser!=null) topNKmser.unpersist(blocking = false)
 
     val totalTime1 = System.currentTimeMillis
     logInfo("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
