@@ -5,12 +5,15 @@ package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.SparkConf
-import org.apache.spark.graphx.{Graph, lib => graphxlib}
+import org.apache.spark.graphx.impl.GraphImpl
+import org.apache.spark.graphx.{Edge, Graph, PartitionStrategy, lib => graphxlib}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
+
+import scala.reflect.ClassTag
 
 
 object GraphLPA2 extends App with LazyLogging {
@@ -82,14 +85,28 @@ object GraphLPA2 extends App with LazyLogging {
   }
 
 
-  def cc(edgeTuples: RDD[(Long, Long)], config: Config, sqlContext: SQLContext) = {
+  def cc(edgeTuples: RDD[(Int, Int)], config: Config, sqlContext: SQLContext) = {
     cc_graphx(edgeTuples, sqlContext, config.max_iteration)
   }
 
 
-  def cc_graphx(edgeTuples: RDD[(Long, Long)], sqlContext: SQLContext, max_iteration: Int) = {
-    val graph = Graph.fromEdgeTuples(
-      edgeTuples, 1.toInt, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK_SER, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK_SER
+  def fromEdgeTuples[VD: ClassTag](
+                                    rawEdges: RDD[(Int, Int)],
+                                    defaultValue: VD,
+                                    uniqueEdges: Option[PartitionStrategy] = None,
+                                    edgeStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY,
+                                    vertexStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY): Graph[VD, Int] = {
+    val edges = rawEdges.map(p => Edge(p._1, p._2, 1))
+    val graph = GraphImpl(edges, defaultValue, edgeStorageLevel, vertexStorageLevel)
+    uniqueEdges match {
+      case Some(p) => graph.partitionBy(p).groupEdges((a, b) => a + b)
+      case None => graph
+    }
+  }
+
+  def cc_graphx(edgeTuples: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int) = {
+    val graph = fromEdgeTuples(
+      edgeTuples, 1.toInt, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK_SER_2, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK_SER_2
     )
 
     val cc = graphxlib.MyLabelPropagation.run(graph, max_iteration)
@@ -102,7 +119,7 @@ object GraphLPA2 extends App with LazyLogging {
     println("AAAA " + str)
   }
 
-  protected def run_cc(all_edges: RDD[Array[Long]], config: Config, spark: SparkSession,
+  protected def run_cc(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
                        n_reads: Long) = {
     val sqlContext = spark.sqlContext
 
@@ -142,7 +159,7 @@ object GraphLPA2 extends App with LazyLogging {
       else
         sc.textFile(config.edge_file)).
         map { line =>
-          line.split(",").map(_.toLong)
+          line.split(",").map(_.toInt)
         }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
 
     edges.cache()

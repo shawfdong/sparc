@@ -122,9 +122,9 @@ object MyPregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
-    var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg)).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg)).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
     // compute the messages
-    var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
     var activeMessages = messages.count()
     // Loop
     var prevG: Graph[VD, ED] = null
@@ -132,15 +132,15 @@ object MyPregel extends Logging {
     while (activeMessages > 0 && i < maxIterations) {
       // Receive the messages and update the vertices.
       prevG = g
-      g = g.joinVertices(messages)(vprog).persist(StorageLevel.MEMORY_AND_DISK_SER)
+      g = g.joinVertices(messages)(vprog).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
 
       val oldMessages = messages
-      oldMessages.unpersist(blocking = true)
+      oldMessages.unpersist(blocking = false)
       // Send new messages, skipping edges where neither side received a message. We must cache
       // messages so it can be materialized on the next line, allowing us to uncache the previous
       // iteration.
       messages = GraphXUtils.mapReduceTriplets(
-        g, sendMsg, mergeMsg,None).persist(StorageLevel.MEMORY_AND_DISK_SER)
+        g, sendMsg, mergeMsg,None).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
@@ -149,12 +149,13 @@ object MyPregel extends Logging {
       logInfo("Pregel finished iteration " + i)
 
       // Unpersist the RDDs hidden by newly-materialized RDDs
-      prevG.unpersistVertices(blocking = true)
-      prevG.edges.unpersist(blocking = true)
+      prevG.unpersistVertices(blocking = false)
+      prevG.edges.unpersist(blocking = false)
       // count the iteration
       i += 1
+      System.gc()
     }
-    messages.unpersist(blocking = true)
+    messages.unpersist(blocking = false)
     g
   } // end of apply
 
