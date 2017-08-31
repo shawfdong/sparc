@@ -43,7 +43,8 @@ object MyLabelPropagation {
         }.toMap
       }
       def vertexProgram(vid: VertexId, attr: Long, message: Map[VertexId, Int]): VertexId = {
-        if (message.isEmpty) attr else message.maxBy(_._2)._1
+        if (message.isEmpty) attr else message.toSeq.sortBy(u=>(-u._2,u._1)).head._1
+        //if (message.isEmpty) attr else message.maxBy(_._2)._1
       }
       val initialMessage = Map[VertexId, Int]()
       MyPregel(lpaGraph, initialMessage, maxIterations = maxSteps)(
@@ -122,9 +123,9 @@ object MyPregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
-    var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg)).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
+    var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg)).persist(StorageLevel.MEMORY_AND_DISK_SER)
     // compute the messages
-    var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
+    var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg).persist(StorageLevel.MEMORY_AND_DISK_SER)
     var activeMessages = messages.count()
     // Loop
     var prevG: Graph[VD, ED] = null
@@ -132,7 +133,7 @@ object MyPregel extends Logging {
     while (activeMessages > 0 && i < maxIterations) {
       // Receive the messages and update the vertices.
       prevG = g
-      g = g.joinVertices(messages)(vprog).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
+      g = g.joinVertices(messages)(vprog).persist(StorageLevel.MEMORY_AND_DISK_SER)
 
       val oldMessages = messages
       oldMessages.unpersist(blocking = false)
@@ -140,7 +141,7 @@ object MyPregel extends Logging {
       // messages so it can be materialized on the next line, allowing us to uncache the previous
       // iteration.
       messages = GraphXUtils.mapReduceTriplets(
-        g, sendMsg, mergeMsg,None).persist(StorageLevel.MEMORY_AND_DISK_SER_2)
+        g, sendMsg, mergeMsg,None).persist(StorageLevel.MEMORY_AND_DISK_SER)
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).

@@ -152,9 +152,8 @@ object KmerMapReads2 extends App with LazyLogging {
 
 
     logInfo(s"Generate ${kmer_reads.count} kmers (#count>1 and topN kmer dropped) for iteration $i")
-    //val Nth_size=kmersRDD.filter(u=>Nth_idx==u._2).first._1._2.size
-    // subsampling very abundant k-mers that appear in many reads
-    // remove very rare k-mers that appear only in one read: likely due to sequencing error
+
+
     kmer_reads
   }
 

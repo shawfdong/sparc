@@ -106,7 +106,7 @@ object GraphLPA2 extends App with LazyLogging {
 
   def cc_graphx(edgeTuples: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int) = {
     val graph = fromEdgeTuples(
-      edgeTuples, 1.toInt, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK_SER_2, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK_SER_2
+      edgeTuples, 1.toInt, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK_SER, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK_SER
     )
 
     val cc = graphxlib.MyLabelPropagation.run(graph, max_iteration)
