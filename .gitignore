@@ -6,3 +6,5 @@ test.base64
 nohup.out.*
 .ipynb*
 nohup.out
+pacbio
+tmp
