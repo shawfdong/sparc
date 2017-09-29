@@ -83,15 +83,14 @@ Help
                                paritions for the input, only applicable to local files
       --help                   prints this usage text
 
-## Kmer counting and take tops
-Having data on hand (local or hdfs), next step is to counting kmers and only keep the tops.
+## Count kmers and sort
+
+ __(Optional. If contamination is not required, skip this step)__
+
+Having data on hand (local or hdfs), next step is to counting kmers and sort them by count.
 Example for seq files
 
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.KmerCounting target/scala-2.11/LocalCluster-assembly-0.1.jar -i test/small/*.seq -o tmp/seq_result.txt --format seq
-
-and example for base64 files
-
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.KmerCounting target/scala-2.11/LocalCluster-assembly-0.1.jar -i test/small/*.base64 -o tmp/base64_result.txt --format base64
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.network.timeout=360000 --conf spark.default.parallelism=5000 --conf spark.executor.extraClassPath=target/scala-2.11/LocalCluster-assembly-0.1.jar --conf spark.speculation=true --conf spark.speculation.multiplier=2 --conf spark.eventLog.enabled=false target/scala-2.11/LocalCluster-assembly-0.1.jar KmerCounting --wait 1 -i data/maize14G.seq -o tmp/maize14G_kc_seq_31 --format seq -k 31 -C
 
 Also use "--help" to see the usage
 
@@ -101,27 +100,22 @@ Also use "--help" to see the usage
       -i, --input <dir>        a local dir where seq files are located in,  or a local file, or an hdfs file
       -p, --pattern <pattern>  if input is a local dir, specify file patterns here. e.g. *.seq, 12??.seq
       -o, --output <dir>       output of the top k-mers
+      -C, --canonical_kmer     apply canonical kmer
       --format <format>        input format (seq, parquet or base64)
       -n, --n_partition <value>
-                               paritions for the input, only applicable to local files
+                               paritions for the input
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
       -k, --kmer_length <value>
                                length of k-mer
-      -n, --n_iteration <value>
-                               #iterations to finish the task. default 1. set a bigger value if resource is low.
-      -c, --contamination <value>
-                               the fraction of top k-mers to keep, others are removed likely due to contamination
+      --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
       --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
 
 
-## Find the shared reads for one of top kmers
+## Find the shared reads for kmers(optional removing top kmers first)
 Seq example
 
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.KmerMapReads target/scala-2.11/LocalCluster-assembly-0.1.jar --reads test/small/sample.seq --format seq -k 31 --kmer test/kmercounting_test.txt  --output test/kmer_reads.txt
-
-Base64 example
-
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.KmerMapReads target/scala-2.11/LocalCluster-assembly-0.1.jar --reads test/small/sample.base64 --format base64 -k 31 --kmer test/kmercounting_test.txt  --output test/kmer_reads.txt
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.executor.extraClassPath=target/scala-2.11/LocalCluster-assembly-0.1.jar --conf spark.driver.maxResultSize=8g --conf spark.network.timeout=360000 --conf spark.speculation=true --conf spark.default.parallelism=25000 --conf spark.eventLog.enabled=false --conf spark.executor.userClassPathFirst=true --conf spark.driver.userClassPathFirst=true target/scala-2.11/LocalCluster-assembly-0.1.jar KmerMapReads2 --wait 1 --reads data/maize14G.seq --format seq -o tmp/maize14G_kmerreads.txt_31 -k 31 --kmer tmp/maize14G_kc_seq_31 --contamination 0 --min_kmer_count 2 --max_kmer_count 100000 -C --n_iteration 1
 
 Also use "--help" to see the usage
 
@@ -133,6 +127,10 @@ Also use "--help" to see the usage
       -p, --pattern <pattern>  if input is a local dir, specify file patterns here. e.g. *.seq, 12??.seq
       -o, --output <dir>       output of the top k-mers
       --format <format>        input format (seq, parquet or base64)
+      -C, --canonical_kmer     apply canonical kmer
+      -c, --contamination <value>
+                               the fraction of top k-mers to keep, others are removed likely due to contamination
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
       -n, --n_partition <value>
                                paritions for the input, only applicable to local files
       -k, --kmer_length <value>
@@ -141,15 +139,14 @@ Also use "--help" to see the usage
                                minimum number of reads that shares a kmer
       --max_kmer_count <value>
                                maximum number of reads that shares a kmer. greater than max_kmer_count, however don't be too big
-      -n, --n_iteration <value>
-                               #iterations to finish the task. default 1. set a bigger value if resource is low.
+      --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
       --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
 
 ## Generate graph edges
 Example
 
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.GraphGen target/scala-2.11/LocalCluster-assembly-0.1.jar -i test/kmer_reads.txt  -o test/edges.txt -k 31
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.executor.extraClassPath=target/scala-2.11/LocalCluster-assembly-0.1.jar --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.speculation=true --conf spark.default.parallelism=5000 --conf spark.eventLog.enabled=true target/scala-2.11/LocalCluster-assembly-0.1.jar GraphGen2 --wait 1 -i tmp/maize14G_kmerreads.txt_31 -o tmp/maize14G_edges.txt_31 --min_shared_kmers 10 --max_shared_kmers 20000 --max_degree 50
 
 Also use "--help" to see the usage
 
@@ -158,20 +155,25 @@ Also use "--help" to see the usage
 
       -i, --kmer_reads <file>  reads that a kmer shares. e.g. output from KmerMapReads
       -o, --output <dir>       output of the top k-mers
-      -k, --kmer_length <value>
-                               length of k-mer
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
+      --max_degree <value>     max_degree of a node
       --min_shared_kmers <value>
                                minimum number of kmers that two reads share
-      -n, --n_iteration <value>
-                               #iterations to finish the task. default 1. set a bigger value if resource is low.
+      --max_shared_kmers <value>
+                               max number of kmers that two reads share
+      -n, --n_partition <value>
+                               paritions for the input
+      --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
       --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
 
 
-## Find connected components
+
+## Find clusters by connected components
 Example
 
-    spark-submit --master local[4] --driver-memory 16G --class org.jgi.spark.localcluster.tools.GraphCC target/scala-2.11/LocalCluster-assembly-0.1.jar -i test/graph_gen_test.txt -o tmp/cc.txt
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.default.parallelism=5000 --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.eventLog.enabled=false --conf spark.speculation=true target/scala-2.11/LocalCluster-assembly-0.1.jar GraphCC2 --wait 1 -i tmp/maize14G_edges.txt -o tmp/maize14G_cc.txt --min_shared_kmers 10 --max_shared_kmers 20000 --min_reads_per_cluster 2 --n_iteration 1 --use_graphframes
+
 
 Also use "--help" to see the usage
 
@@ -179,10 +181,68 @@ Also use "--help" to see the usage
     Usage: GraphCC [options]
 
       -i, --edge_file <file>   files of graph edges. e.g. output from GraphGen
-      -o, --output <dir>       output of the top k-mers
-      -n, --n_iteration <value>
-                               #iterations to finish the task. default 1. set a bigger value if resource is low.
+      -o, --output <dir>       output file
+      -n, --n_partition <value>
+                               paritions for the input
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
+      --use_graphframes
+      --min_shared_kmers <value>
+                               minimum number of kmers that two reads share
+      --max_shared_kmers <value>
+                               max number of kmers that two reads share
+      --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
       --min_reads_per_cluster <value>
                                minimum reads per cluster
+      --scratch_dir <dir>      where the intermediate results are
+      --help                   prints this usage text
+
+
+## Or find clusters by Label Propagation Algorithm
+Example
+
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.default.parallelism=5000 --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.eventLog.enabled=false --conf spark.speculation=true --class org.jgi.spark.localcluster.tools.GraphLPA2 target/scala-2.11/LocalCluster-assembly-0.1.jar --wait 1 -i tmp/maize14G_edges.txt_31 -o tmp/maize14G_lpa.txt_31 --min_shared_kmers 10 --max_shared_kmers 20000 --min_reads_per_cluster 2 --max_iteration 50
+
+
+Also use "--help" to see the usage
+
+    GraphLPA 0.1
+    Usage: GraphLPA [options]
+
+      -i, --edge_file <file>   files of graph edges. e.g. output from GraphGen
+      -o, --output <dir>       output file
+      -n, --n_partition <value>
+                               paritions for the input
+      --max_iteration <value>  max ietration for LPA
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
+      --n_output_blocks <value>
+                               output block number
+      --min_shared_kmers <value>
+                               minimum number of kmers that two reads share
+      --max_shared_kmers <value>
+                               max number of kmers that two reads share
+      --min_reads_per_cluster <value>
+                               minimum reads per cluster
+      --scratch_dir <dir>      where the intermediate results are
+      --help                   prints this usage text
+
+
+## Generate output
+Save the output in text format ("seq-id,cluster-id" per line). Example
+
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 20G --executor-cores 2 --conf spark.default.parallelism=54 --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.speculation=true --conf spark.eventLog.enabled=false target/scala-2.11/LocalCluster-assembly-0.1.jar CCAddSeq --wait 1 -i tmp/maize14G_lpa.txt_31 --reads data/maize14G.seq -o tmp/maize14G_lpaseq.txt_31
+
+Also use "--help" to see the usage
+
+    GraphCC 0.1
+    Usage: CCAddSeq [options]
+
+      -i, --cc_file <file>     files of graph edges. e.g. output from GraphCC
+      --reads <dir|file>       a local dir where seq files are located in,  or a local file, or an hdfs file
+      -p, --pattern <pattern>  if input is a local dir, specify file patterns here. e.g. *.seq, 12??.seq
+      --format <format>        input format (seq, parquet or base64)
+      -o, --output <dir>       output file
+      -n, --n_partition <value>
+                               paritions for the input
+      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
       --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
