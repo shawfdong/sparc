@@ -76,7 +76,7 @@ object CCAddSeq extends App with LazyLogging {
 
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
-    val readsRDD = KmerMapReads.make_read_id_rdd(seqFiles, config.format, sc).map(x => (x._1.toInt, x._2))
+    val readsRDD = KmerMapReads2.make_read_id_rdd(seqFiles, config.format, sc).map(x => (x._1.toInt, x._2))
     val resultRDD = ccRDD.join(readsRDD).map(_._2).map(x => x._2 + "\t" + x._1.toString).coalesce(18, shuffle = false)
     KmerCounting.delete_hdfs_file(config.output)
     resultRDD.saveAsTextFile(config.output)

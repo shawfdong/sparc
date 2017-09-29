@@ -108,6 +108,69 @@ object KmerMapReads2 extends App with LazyLogging {
     logger.info(str)
   }
 
+  def make_read_id_rdd(file: String, format: String, sc: SparkContext): RDD[(Long, String)] = {
+    if (format.equals("parquet")) throw new NotImplementedError
+    else {
+      var textRDD =
+        sc.textFile(file)
+
+      if (format.equals("seq")) {
+        textRDD.map {
+          line => line.split("\t|\n")
+        }.map { x => (x(0).toLong, x(1)) }
+      }
+
+      else if (format.equals("base64")) {
+        throw new IllegalArgumentException
+      }
+      else
+        throw new IllegalArgumentException
+    }
+
+  }
+
+  def make_reads_rdd(file: String, format: String, n_partition: Int, sc: SparkContext): RDD[(Long, String)] = {
+    make_reads_rdd(file, format, n_partition, -1, sc)
+  }
+
+  def make_reads_rdd(file: String, format: String, n_partition: Int, sample_fraction: Double, sc: SparkContext): RDD[(Long, String)] = {
+    if (format.equals("parquet")) throw new NotImplementedError
+    else {
+      var textRDD = if (n_partition > 0)
+        sc.textFile(file, minPartitions = n_partition)
+      else
+        sc.textFile(file)
+      if (sample_fraction > 0) textRDD = textRDD.sample(false, sample_fraction, Random.nextLong())
+      if (format.equals("seq")) {
+
+        textRDD.map {
+          line => line.split("\t|\n")
+        }.map { x => (x(0).toLong, x(2)) }
+      }
+
+      else if (format.equals("base64")) {
+
+        textRDD.map {
+          line =>
+            val a = line.split(",")
+            val id = a(0).toInt
+            val seq = a.drop(1).map {
+              t =>
+                val lst = t.split(" ")
+                val len = lst(0).toInt
+                DNASeq.from_base64(lst(1)).to_bases(len)
+            }.mkString("N")
+            (id, seq)
+        }
+
+      }
+      else
+        throw new IllegalArgumentException
+    }
+
+  }
+
+
 
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], topNKmser: RDD[(DNASeq, Boolean)],
                                 config: Config, sc: SparkContext) = {
@@ -187,7 +250,7 @@ object KmerMapReads2 extends App with LazyLogging {
 
     var topNKmser = get_topN_kmers(sc, config)
 
-    val readsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
+    val readsRDD = KmerMapReads2.make_reads_rdd(seqFiles, config.format, config.n_partition, sc)
     readsRDD.cache()
 
 

@@ -118,7 +118,7 @@ object KmerCounting2 extends App with LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
+    val smallReadsRDD = KmerMapReads2.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
 
     smallReadsRDD.cache()
 

@@ -8,9 +8,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.jgi.spark.localcluster._
-import org.jgi.spark.localcluster.kvstore.{KVStoreManager, KVStoreManagerSingleton}
-import org.jgi.spark.localcluster.myredis.{JedisManager, JedisManagerSingleton}
-import org.jgi.spark.localcluster.tools.KmerMapReads2.logger
 import sext._
 
 
@@ -18,10 +15,8 @@ object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     k: Int = -1, format: String = "seq", sleep: Int = 0, canonical_kmer: Boolean = false,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0,
-                    use_redis: Boolean = false, redis_ip_ports: Array[(String, Int)] = null, n_redis_slot: Int = 2, //redis config, to be removed
-                    user_kvstore: Boolean = false, kvstore_ip_ports: Array[(String, Int)] = null,
-                    use_bloom_filter: Boolean = false)
+                    scratch_dir: String = "/tmp", n_partition: Int = 0
+                   )
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("KmerCounting") {
@@ -41,43 +36,6 @@ object KmerCounting extends App with LazyLogging {
         c.copy(canonical_kmer = true)).text("apply canonical kmer")
 
 
-      opt[String]("kvstore").valueName("<ip:port,ip:port,...>").validate { x =>
-        val t = x.split(",").map {
-          u =>
-            if (Utils.parseIpPort(u)._2 < 1) 1 else 0
-        }.sum
-        if (t > 0)
-          failure("format is not correct")
-        else
-          success
-      }.action { (x, c) =>
-        val r = x.split(",").map(Utils.parseIpPort)
-        c.copy(kvstore_ip_ports = r, user_kvstore = true)
-      }.text("ip:port for kvstore server. Only IP supported.")
-
-
-      opt[String]("redis").valueName("<ip:port,ip:port,...>").validate { x =>
-        val t = x.split(",").map {
-          u =>
-            if (Utils.parseIpPort(u)._2 < 1) 1 else 0
-        }.sum
-        if (t > 0)
-          failure("format is not correct")
-        else
-          success
-      }.action { (x, c) =>
-        val r = x.split(",").map(Utils.parseIpPort)
-        c.copy(redis_ip_ports = r, use_redis = true)
-      }.text("ip:port for redis servers. Only IP supported.")
-
-      opt[Int]("n_redis_slot").
-        validate(x =>
-          if (x > 0) success else failure("should be positve")
-        ).action((x, c) =>
-        c.copy(n_redis_slot = x))
-        .text("hash key slots for one redis instance")
-
-
       opt[String]("format").valueName("<format>").action((x, c) =>
         c.copy(format = x)).
         validate(x =>
@@ -93,10 +51,6 @@ object KmerCounting extends App with LazyLogging {
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
         .text("wait $slep second before stop spark session. For debug purpose, default 0.")
-
-      opt[Unit]("use_bloom_filter").action((x, c) =>
-        c.copy(use_bloom_filter = true))
-        .text("use bloomer filter")
 
 
       opt[Int]('k', "kmer_length").required().action((x, c) =>
@@ -124,7 +78,7 @@ object KmerCounting extends App with LazyLogging {
     parser.parse(args, Config())
   }
 
-  def logInfo(str: String)={
+  def logInfo(str: String) = {
     println(str)
     logger.info(str)
   }
@@ -143,103 +97,10 @@ object KmerCounting extends App with LazyLogging {
     }
   }
 
-  def getJedisManager(config: Config): JedisManager = {
-    JedisManagerSingleton.instance(config.redis_ip_ports, config.n_redis_slot)
-  }
-
-  def getKVStoreManager(config: Config): KVStoreManager = {
-    KVStoreManagerSingleton.instance(config.kvstore_ip_ports)
-  }
-
-
-  def redisFlushAll(config: Config): Unit = {
-    val mgr = getJedisManager(config)
-    mgr.flushAll()
-  }
-
-  def kvstoreFlushAll(config: Config): Unit = {
-    val mgr = getKVStoreManager(config)
-    mgr.flushAll()
-  }
-
-  private def process_iteration_kvstore(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext, kmer_gen_fun: (String) => Array[DNASeq]): RDD[(DNASeq, Int)] = {
-    val THRESH_HOLD = 1024 * 32
-    readsRDD.foreachPartition {
-      iterator =>
-        val buf = scala.collection.mutable.ArrayBuffer.empty[DNASeq]
-        val cluster = getKVStoreManager(config)
-
-        def incr_fun(u: collection.Iterable[DNASeq]) = cluster.incr_batch(u, config.use_bloom_filter)
-
-        iterator.foreach {
-          line =>
-            kmer_gen_fun(line)
-              .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
-              s =>
-                buf.append(s)
-                if (buf.length > THRESH_HOLD) {
-                  incr_fun(buf)
-                  buf.clear()
-                }
-            }
-        }
-        //remained
-        if (buf.nonEmpty) {
-          incr_fun(buf)
-          buf.clear()
-        }
-    }
-    val cluster = getKVStoreManager(config)
-    import org.jgi.spark.localcluster.rdd._
-    sc.kmerCountFromKVStore(cluster.kvstoreSlots, useBloomFilter = config.use_bloom_filter, minimumCount = 1)
-
-
-  }
-
-  private def process_iteration_redis(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext, kmer_gen_fun: (String) => Array[DNASeq]): RDD[(DNASeq, Int)] = {
-    val THRESH_HOLD = 1024 * 32
-    readsRDD.foreachPartition {
-      iterator =>
-        val buf = scala.collection.mutable.ArrayBuffer.empty[DNASeq]
-        val cluster = getJedisManager(config)
-
-        def incr_fun(u: collection.Iterable[DNASeq]) = if (config.use_bloom_filter) cluster.bf_incr_batch(u) else cluster.incr_batch(u)
-
-        iterator.foreach {
-          line =>
-            kmer_gen_fun(line)
-              .filter(o => Utils.pos_mod(o.hashCode, config.n_iteration) == i).foreach {
-              s =>
-                buf.append(s)
-                if (buf.length > THRESH_HOLD) {
-                  incr_fun(buf)
-                  buf.clear()
-                }
-            }
-        }
-        //remained
-        if (buf.nonEmpty) {
-          incr_fun(buf)
-          buf.clear()
-        }
-    }
-    val cluster = getJedisManager(config)
-    import org.jgi.spark.localcluster.rdd._
-    if (config.use_bloom_filter)
-      sc.kmerCountFromRedisWithBloomFilter(cluster.redisSlots)
-    else
-      sc.kmerCountFromRedis(cluster.redisSlots)
-
-  }
-
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
     val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
-    val smallKmersRDD = if (config.use_redis)
-      process_iteration_redis(i, readsRDD, config, sc, kmer_gen_fun)
-    else if (config.user_kvstore)
-      process_iteration_kvstore(i, readsRDD, config, sc, kmer_gen_fun)
-    else
+    val smallKmersRDD =
       process_iteration_spark(i, readsRDD, config, kmer_gen_fun)
 
     val rdd = smallKmersRDD.filter(_._2 > 1)
@@ -266,17 +127,13 @@ object KmerCounting extends App with LazyLogging {
     val seqFiles = Utils.get_files(config.input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
 
-    val smallReadsRDD = KmerMapReads.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
+    val smallReadsRDD = KmerMapReads2.make_reads_rdd(seqFiles, config.format, config.n_partition, -1, sc).map(_._2)
 
     smallReadsRDD.cache()
-    if (config.use_redis) redisFlushAll(config)
-    if (config.user_kvstore) kvstoreFlushAll(config)
 
     val values = 0.until(config.n_iteration).map {
       i =>
         val t = process_iteration(i, smallReadsRDD, config, sc)
-        if (config.use_redis) redisFlushAll(config)
-        if (config.user_kvstore) kvstoreFlushAll(config)
         t
     }
 
@@ -310,10 +167,8 @@ object KmerCounting extends App with LazyLogging {
     options match {
       case Some(_) =>
         val config = options.get
-        if (config.user_kvstore && config.use_redis) {
-          logger.error("cannot use both redis and kvstore")
-          sys.exit(-1)
-        }
+
+
         logInfo(s"called with arguments\n${options.valueTreeString}")
         val conf = new SparkConf().setAppName("Spark Kmer Counting")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
