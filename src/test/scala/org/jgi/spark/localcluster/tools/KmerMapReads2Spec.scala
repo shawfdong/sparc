@@ -11,7 +11,7 @@ class KmerMapReads2Spec extends FlatSpec with Matchers with BeforeAndAfter with 
 {
 
   "parse command line" should "be good" in {
-    val cfg = KmerMapReads2.parse_command_line("--reads test -p *.seq -k 31 -o tmp".split(" ")).get
+    val cfg = KmerMapReads2.parse_command_line("--reads test -p *.seq -k 31 --kmer test/kmercounting_test.txt -o tmp".split(" ")).get
     cfg.reads_input should be("test")
   }
   "kmer mapping" should "work on the test seq files" in {

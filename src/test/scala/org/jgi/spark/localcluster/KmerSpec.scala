@@ -23,7 +23,7 @@ class KmerSpec extends FlatSpec with Matchers {
     val seq = "ATCGATC"
     val k = 3
     val kmers = Kmer.generate_kmer(seq, k)
-    kmers.length shouldEqual 4
+    kmers.length shouldEqual 2
   }
 
   "Kmer generator" should "work as expected" in {

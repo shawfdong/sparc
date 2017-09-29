@@ -44,6 +44,7 @@ libraryDependencies ++= Seq(
   "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.7.3" % "provided",
   "org.apache.hadoop" % "hadoop-common" % "2.7.3" % "provided",
   "org.apache.spark" %% "spark-hive"       % "2.0.1" % "provided",
+  "com.google.guava" % "guava" % "14.0.1" % "provided",
 
   "org.slf4j" % "slf4j-simple" % "1.7.21" % "provided",
   "org.slf4j" % "slf4j-api" % "1.7.21" % "provided",

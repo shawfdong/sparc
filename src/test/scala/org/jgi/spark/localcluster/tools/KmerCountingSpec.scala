@@ -19,7 +19,7 @@ class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
   private val appName = "KmerCountingSpec"
 
   "parse command line" should "be good" in {
-    val cfg = KmerCounting.parse_command_line("-i test -p *.seq -o tmp".split(" ")).get
+    val cfg = KmerCounting.parse_command_line("-k 31 -i test -p *.seq -o tmp".split(" ")).get
     cfg.input should be("test")
   }
   "kmer counting" should "work on the test seq files" in {
@@ -35,7 +35,7 @@ class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
   }
 
   "kmer counting" should "work on the test seq files with multiple N" in {
-    val cfg = KmerCounting.parse_command_line("-i test/small -k 31 -p sample2.seq -o tmp/kmercounting_seq_sample2.txt --n_iteration 1 -k 15".split(" ")).get
+    val cfg = KmerCounting.parse_command_line("-i test/small -k 31 -p sample2.seq -o tmp/kmercounting_seq_sample2.txt --n_iteration 1".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
     KmerCounting.run(cfg, sc)
   }
@@ -48,7 +48,7 @@ class KmerCountingSpec extends FlatSpec with Matchers  with SharedSparkContext
   }
 
   "kmer counting" should "work on the test base64 files with multiple N" in {
-    val cfg = KmerCounting.parse_command_line("-i test/small -k 31 -p sample2.base64 --format base64 -o tmp/kmercounting_base64_sample2.txt --n_iteration 2 -k 15".split(" ")).get
+    val cfg = KmerCounting.parse_command_line("-i test/small -k 31 -p sample2.base64 --format base64 -o tmp/kmercounting_base64_sample2.txt --n_iteration 2".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
     KmerCounting.run(cfg, sc)
   }

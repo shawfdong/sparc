@@ -36,7 +36,7 @@ class GraphGen2Spec extends FlatSpec with Matchers with BeforeAndAfter with Shar
 
   "graph gen" should "work on the fake seq file" in {
     val cfg = GraphGen2.parse_command_line(
-      "-i test/kmermapping_seq_fake.txt -k 31 -o tmp/graph_gen_fake.txt --n_iteration 1".split(" ")
+      "-i test/kmermapping_seq_fake.txt -o tmp/graph_gen_fake.txt --n_iteration 1".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 
