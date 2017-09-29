@@ -7,7 +7,7 @@ package org.jgi.spark.localcluster
 import java.nio.ByteBuffer
 import java.util
 
-import com.google.common.hash.Hashing
+
 import de.greenrobot.common.hash.Murmur3A
 import org.scalatest._
 
@@ -18,31 +18,6 @@ import scala.util.Random
 class UtilsSpec extends FlatSpec with Matchers {
   val N=1000*1000*10
 
-  "All ip addresses" should "be found" in {
-    JavaUtils.getAllIPs.foreach(println)
-  }
-
-  "loopback ip" should "be matched" in {
-    val l = new util.ArrayList[String]
-    l.append("127.0.0.1")
-    JavaUtils.getMatchedIP(l) shouldEqual "127.0.0.1"
-  }
-
-  "pattern match" should "also work" in {
-    JavaUtils.getMatchedIP("127.0.*") shouldEqual "127.0.0.1"
-  }
-
-  "gogole hash test" should "work" in {
-    val bytes = new Array[Byte](32)
-    val start = System.currentTimeMillis()
-    0.until(N).foreach {
-      _=>
-      Random.nextBytes(bytes)
-      Hashing.murmur3_32().hashBytes(bytes).asInt()
-    }
-    val dt:Double = (System.currentTimeMillis()-start)/1000.0
-    println(s"guava takes $dt seconds")
-  }
 
   "java common hash test" should "work" in {
      val bytes = new Array[Byte](32)
