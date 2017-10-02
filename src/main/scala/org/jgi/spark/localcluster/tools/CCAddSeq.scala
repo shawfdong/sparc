@@ -16,8 +16,8 @@ object CCAddSeq extends App with LazyLogging {
                       n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config]("CCAddSeq") {
-      head("GraphCC", Utils.VERSION)
+    val parser = new scopt.OptionParser[Config]("AddSeq") {
+      head("AddSeq", Utils.VERSION)
 
       opt[String]('i', "cc_file").required().valueName("<file>").action((x, c) =>
         c.copy(cc_file = x)).text("files of graph edges. e.g. output from GraphCC")
@@ -95,7 +95,7 @@ object CCAddSeq extends App with LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
-        val conf = new SparkConf().setAppName("Spark CCAddSeq")
+        val conf = new SparkConf().setAppName("Spark AddSeq")
         conf.registerKryoClasses(Array(classOf[DNASeq]))
 
         val sc = new SparkContext(conf)
