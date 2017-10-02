@@ -13,7 +13,7 @@ object CCAddSeq extends App with LazyLogging {
 
   case class Config(cc_file: String = "", output: String = "",
                     sleep: Int = 0, reads_input: String = "", pattern: String = "", format: String = "seq",
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                      n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("CCAddSeq") {
@@ -45,12 +45,7 @@ object CCAddSeq extends App with LazyLogging {
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
-        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
-
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
-
+        .text("waiting seconds before stop spark session. For debug purpose, default 0.")
 
       help("help").text("prints this usage text")
 

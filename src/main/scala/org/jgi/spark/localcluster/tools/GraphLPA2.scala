@@ -22,7 +22,7 @@ object GraphLPA2 extends App with LazyLogging {
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2, max_iteration: Int = 10,
                     n_output_blocks: Int = 180,
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                    n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("GraphLPA") {
@@ -73,10 +73,6 @@ object GraphLPA2 extends App with LazyLogging {
       opt[Int]("min_reads_per_cluster").action((x, c) =>
         c.copy(min_reads_per_cluster = x))
         .text("minimum reads per cluster")
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
-
 
       help("help").text("prints this usage text")
 

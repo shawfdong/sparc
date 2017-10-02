@@ -15,7 +15,7 @@ object KmerCounting extends App with LazyLogging {
 
   case class Config(input: String = "", output: String = "", n_iteration: Int = 1, pattern: String = "",
                     k: Int = -1, format: String = "seq", sleep: Int = 0, canonical_kmer: Boolean = false,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0
+                    n_partition: Int = 0
                    )
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -66,11 +66,6 @@ object KmerCounting extends App with LazyLogging {
           if (x >= 1) success
           else failure("n should be positive"))
         .text("#iterations to finish the task. default 1. set a bigger value if resource is low.")
-
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
-
 
       help("help").text("prints this usage text")
 

@@ -6,8 +6,8 @@ import com.typesafe.scalalogging.LazyLogging
   * Created by Lizhen Shi on 5/28/17.
   */
 object Main extends LazyLogging {
-  val apps: List[App] = List(KmerCounting,KmerCounting2, KmerMapReads2, GraphGen, GraphGen2,
-    GraphCC, GraphCC2,GraphLPA,GraphLPA2, CCAddSeq, Seq2Base64, Seq2Parquet, Repartition)
+  val apps: List[App] = List(KmerCounting, KmerMapReads2, GraphGen2,
+    GraphCC,GraphLPA2, CCAddSeq, Seq2Base64, Seq2Parquet, Repartition)
   val names: Map[String, App] = apps.map(x => (x.getClass.getSimpleName.replace("$", ""), x)).toMap
 
   def companion[T](implicit man: Manifest[T]): T =

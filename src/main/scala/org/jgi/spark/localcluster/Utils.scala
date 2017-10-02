@@ -18,7 +18,7 @@ object Utils {
   def pos_mod(a: Int, k: Int): Int = ((a % k) + k) % k
 
 
-  def VERSION = "0.1"
+  def VERSION = "0.5"
 
   def get_files(input: String, pattern: String): String = {
     if (input.startsWith("hdfs:") || pattern.length() == 0)

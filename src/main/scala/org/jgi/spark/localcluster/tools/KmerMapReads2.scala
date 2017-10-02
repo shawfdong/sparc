@@ -18,7 +18,7 @@ object KmerMapReads2 extends App with LazyLogging {
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
                     max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                    n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("KmerMapReads") {
@@ -27,7 +27,7 @@ object KmerMapReads2 extends App with LazyLogging {
       opt[String]("reads").required().valueName("<dir/file>").action((x, c) =>
         c.copy(reads_input = x)).text("a local dir where seq files are located in,  or a local file, or an hdfs file")
 
-      opt[String]("kmer").required().valueName("<file>").action((x, c) =>
+      opt[String]("kmer").valueName("<file>").action((x, c) =>
         c.copy(kmer_input = x)).text("Kmers to be keep. e.g. output from kmer counting ")
 
       opt[String]('p', "pattern").valueName("<pattern>").action((x, c) =>
@@ -91,11 +91,6 @@ object KmerMapReads2 extends App with LazyLogging {
           if (x >= 1) success
           else failure("n should be positive"))
         .text("#iterations to finish the task. default 1. set a bigger value if resource is low.")
-
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
-
 
       help("help").text("prints this usage text")
 
@@ -169,7 +164,6 @@ object KmerMapReads2 extends App with LazyLogging {
     }
 
   }
-
 
 
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], topNKmser: RDD[(DNASeq, Boolean)],
@@ -268,7 +262,7 @@ object KmerMapReads2 extends App with LazyLogging {
     //clean up
     rdds.foreach(_.unpersist(blocking = false))
     readsRDD.unpersist(blocking = false)
-    if (topNKmser!=null) topNKmser.unpersist(blocking = false)
+    if (topNKmser != null) topNKmser.unpersist(blocking = false)
 
     val totalTime1 = System.currentTimeMillis
     logInfo("Total process time: %.2f minutes".format((totalTime1 - start).toFloat / 60000))
@@ -289,6 +283,11 @@ object KmerMapReads2 extends App with LazyLogging {
 
         if (config.max_kmer_count < config.min_kmer_count) {
           logger.error("max_kmer_count should not be less than min_kmer_count")
+          sys.exit(-1)
+        }
+
+        if (config._contamination > 0.0 && config.kmer_input == "") {
+          logger.error("kmer input must be specified when  contamination is greater than zero.")
           sys.exit(-1)
         }
 

@@ -22,7 +22,7 @@ object GraphCC extends App with LazyLogging {
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
                     top_nodes_ratio: Double = 0.1, big_cluster_threshold: Double = 0.2, n_output_blocks: Int = 180,
                     n_iteration: Int = 1, min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0, use_graphframes: Boolean = false)
+                    n_partition: Int = 0, use_graphframes: Boolean = false)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("GraphCC") {
@@ -85,10 +85,6 @@ object GraphCC extends App with LazyLogging {
       opt[Int]("min_reads_per_cluster").action((x, c) =>
         c.copy(min_reads_per_cluster = x))
         .text("minimum reads per cluster")
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
-
 
       help("help").text("prints this usage text")
 
@@ -252,7 +248,7 @@ object GraphCC extends App with LazyLogging {
 
     val (clusters, topNodes) = run_cc_with_nodes(vertex_groups, all_edges, config, spark, nodes = big_cluster)
     clusters.persist(StorageLevel.MEMORY_AND_DISK)
-    if (topNodes!=null) cluster_list.append(saveTopNodes(topNodes, spark.sparkContext))
+    if (topNodes != null) cluster_list.append(saveTopNodes(topNodes, spark.sparkContext))
     val small_clusters = clusters.filter(_._2.length / n_reads.toDouble < config.big_cluster_threshold)
     cluster_list.append(saveRDD(small_clusters, config.n_output_blocks))
 

@@ -13,8 +13,8 @@ import sext._
 object GraphGen2 extends App with LazyLogging {
 
   case class Config(kmer_reads: String = "", output: String = "", max_degree: Int = 100,
-                    n_iteration: Int = 1, min_shared_kmers: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
-                    scratch_dir: String = "/tmp", n_partition: Int = 0)
+                    n_iteration: Int = 1, min_shared_kmers: Int = 2, sleep: Int = 0,
+                    n_partition: Int = 0)
 
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -46,14 +46,6 @@ object GraphGen2 extends App with LazyLogging {
         .text("minimum number of kmers that two reads share")
 
 
-      opt[Int]("max_shared_kmers").action((x, c) =>
-        c.copy(max_shared_kmers = x)).
-        validate(x =>
-          if (x >= 1) success
-          else failure("max_shared_kmers should be greater than 1"))
-        .text("max number of kmers that two reads share")
-
-
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions for the input")
@@ -64,10 +56,6 @@ object GraphGen2 extends App with LazyLogging {
           if (x >= 1) success
           else failure("n should be positive"))
         .text("#iterations to finish the task. default 1. set a bigger value if resource is low.")
-
-
-      opt[String]("scratch_dir").valueName("<dir>").action((x, c) =>
-        c.copy(scratch_dir = x)).text("where the intermediate results are")
 
 
       help("help").text("prints this usage text")
@@ -170,7 +158,7 @@ object GraphGen2 extends App with LazyLogging {
         val config = options.get
 
         logger.info(s"called with arguments\n${options.valueTreeString}")
-        require(config.min_shared_kmers <= config.max_shared_kmers)
+        //require(config.min_shared_kmers <= config.max_shared_kmers)
         val conf = new SparkConf().setAppName("Spark Graph Gen")
         //conf.registerKryoClasses(Array(classOf[DNASeq])) //don't know why kryo cannot find the class
 
