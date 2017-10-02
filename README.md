@@ -94,7 +94,7 @@ Example for seq files
 
 Also use "--help" to see the usage
 
-    kmer counting 0.1
+    kmer counting 0.5
     Usage: KmerCounting [options]
 
       -i, --input <dir>        a local dir where seq files are located in,  or a local file, or an hdfs file
@@ -108,8 +108,8 @@ Also use "--help" to see the usage
       -k, --kmer_length <value>
                                length of k-mer
       --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
-      --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
+
 
 
 ## Find the shared reads for kmers(optional removing top kmers first)
@@ -119,7 +119,7 @@ Seq example
 
 Also use "--help" to see the usage
 
-    KmerMapReads 0.1
+    KmerMapReads 0.5
     Usage: KmerMapReads [options]
 
       --reads <dir/file>       a local dir where seq files are located in,  or a local file, or an hdfs file
@@ -140,8 +140,9 @@ Also use "--help" to see the usage
       --max_kmer_count <value>
                                maximum number of reads that shares a kmer. greater than max_kmer_count, however don't be too big
       --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
-      --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
+
+
 
 ## Generate graph edges
 Example
@@ -150,7 +151,7 @@ Example
 
 Also use "--help" to see the usage
 
-    GraphGen 0.1
+    GraphGen 0.5
     Usage: GraphGen [options]
 
       -i, --kmer_reads <file>  reads that a kmer shares. e.g. output from KmerMapReads
@@ -159,32 +160,36 @@ Also use "--help" to see the usage
       --max_degree <value>     max_degree of a node
       --min_shared_kmers <value>
                                minimum number of kmers that two reads share
-      --max_shared_kmers <value>
-                               max number of kmers that two reads share
       -n, --n_partition <value>
                                paritions for the input
       --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
-      --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
+
 
 
 
 ## Find clusters by connected components
 Example
 
-    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.default.parallelism=5000 --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.eventLog.enabled=false --conf spark.speculation=true target/scala-2.11/LocalCluster-assembly-0.1.jar GraphCC2 --wait 1 -i tmp/maize14G_edges.txt -o tmp/maize14G_cc.txt --min_shared_kmers 10 --max_shared_kmers 20000 --min_reads_per_cluster 2 --n_iteration 1 --use_graphframes
+    spark-submit --master spark://genomics-ecs1:7077 --deploy-mode client --driver-memory 55G --driver-cores 5 --executor-memory 18G --executor-cores 2 --conf spark.default.parallelism=5000 --conf spark.driver.maxResultSize=5g --conf spark.network.timeout=360000 --conf spark.eventLog.enabled=false --conf spark.speculation=true target/scala-2.11/LocalCluster-assembly-0.1.jar GraphCC --wait 1 -i tmp/maize14G_edges.txt -o tmp/maize14G_cc.txt --min_shared_kmers 10 --max_shared_kmers 20000 --min_reads_per_cluster 2 --n_iteration 1 --use_graphframes --top_nodes_ratio 0.05 --big_cluster_threshold 0.05
 
 
 Also use "--help" to see the usage
 
-    GraphCC 0.1
+    GraphCC 0.5
     Usage: GraphCC [options]
 
       -i, --edge_file <file>   files of graph edges. e.g. output from GraphGen
       -o, --output <dir>       output file
       -n, --n_partition <value>
                                paritions for the input
+      --top_nodes_ratio <value>
+                               within a big cluster, top-degree nodes will be removed to re-cluster. This ratio determines how many nodes are removed.
+      --big_cluster_threshold <value>
+                               Define big cluster. A cluster whose size > #reads*big_cluster_threshold is big
       --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
+      --n_output_blocks <value>
+                               output block number
       --use_graphframes
       --min_shared_kmers <value>
                                minimum number of kmers that two reads share
@@ -193,7 +198,6 @@ Also use "--help" to see the usage
       --n_iteration <value>    #iterations to finish the task. default 1. set a bigger value if resource is low.
       --min_reads_per_cluster <value>
                                minimum reads per cluster
-      --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
 
 
@@ -205,7 +209,7 @@ Example
 
 Also use "--help" to see the usage
 
-    GraphLPA 0.1
+    GraphLPA 0.5
     Usage: GraphLPA [options]
 
       -i, --edge_file <file>   files of graph edges. e.g. output from GraphGen
@@ -222,7 +226,6 @@ Also use "--help" to see the usage
                                max number of kmers that two reads share
       --min_reads_per_cluster <value>
                                minimum reads per cluster
-      --scratch_dir <dir>      where the intermediate results are
       --help                   prints this usage text
 
 
@@ -233,8 +236,8 @@ Save the output in text format ("seq-id,cluster-id" per line). Example
 
 Also use "--help" to see the usage
 
-    GraphCC 0.1
-    Usage: CCAddSeq [options]
+    AddSeq 0.5
+    Usage: AddSeq [options]
 
       -i, --cc_file <file>     files of graph edges. e.g. output from GraphCC
       --reads <dir|file>       a local dir where seq files are located in,  or a local file, or an hdfs file
@@ -243,6 +246,5 @@ Also use "--help" to see the usage
       -o, --output <dir>       output file
       -n, --n_partition <value>
                                paritions for the input
-      --wait <value>           wait $slep second before stop spark session. For debug purpose, default 0.
-      --scratch_dir <dir>      where the intermediate results are
+      --wait <value>           waiting seconds before stop spark session. For debug purpose, default 0.
       --help                   prints this usage text
