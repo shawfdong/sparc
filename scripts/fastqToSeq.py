@@ -49,12 +49,17 @@ def extract_data(in_file, out_file, paired, shuffle):
                 seqID = line[1:-1]
             if lineno%4 == 2: 
                 seq_list.append(seqID + "\t" + line[:-1].upper() + "\n")     
+	    if len(seq_list) > 1e6:
+    		if shuffle:
+        	    random.shuffle(seq_list)
+    		out.writelines(seq_list)
+    	    	seq_list = []
         seq.close()
         
     if shuffle:
         random.shuffle(seq_list)
-    
     out.writelines(seq_list)
+
     out.close()
 
 def main(argv):

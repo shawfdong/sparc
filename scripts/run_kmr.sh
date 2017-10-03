@@ -15,7 +15,7 @@ echo $CMD
 
 if [ $# -gt 0 ]
   then
-     nohup $CMD &
+     nohup $CMD 
      echo "submitted"
 else
      echo "dry-run, not runing"
