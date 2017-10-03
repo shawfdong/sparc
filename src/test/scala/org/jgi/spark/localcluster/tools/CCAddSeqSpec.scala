@@ -14,13 +14,13 @@ class CCAddSeqSpec extends FlatSpec with Matchers with BeforeAndAfter with Share
 
 
   "parse command line" should "be good" in {
-    val cfg = CCAddSeq.parse_command_line("--reads test -p *.seq -i test/cc_test.txt -o tmp/cc_seq.txt".split(" ")).get
+    val cfg = CCAddSeq.parse_command_line("--reads data -p *.seq -i data/cc_test.txt -o tmp/cc_seq.txt".split(" ")).get
     cfg.cc_file should be("data/cc_test.txt")
   }
 
   "CCAddSeqSpec" should "work on the test seq and cc files" in {
     val cfg = CCAddSeq.parse_command_line(
-      "--reads test -p *.seq -i data/cc_test.txt -o tmp/cc_seq.txt".split(" ")
+      "--reads data -p *.seq -i data/cc_test.txt -o tmp/cc_seq.txt".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 

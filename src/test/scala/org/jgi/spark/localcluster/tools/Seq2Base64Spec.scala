@@ -42,7 +42,7 @@ class Seq2Base64Spec extends FlatSpec with Matchers with BeforeAndAfter {
     cfg.input should be ("test")
   }
   "Seq2Base64" should "work on the test seq files" in {
-    val cfg = Seq2Base64.parse_command_line("-i test -p sample.seq -o tmp/test.base64 -n 4".split(" ")).get
+    val cfg = Seq2Base64.parse_command_line("-i data -p sample.seq -o tmp/test.base64 -n 4".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
     Seq2Base64.run(cfg, spark)
   }
