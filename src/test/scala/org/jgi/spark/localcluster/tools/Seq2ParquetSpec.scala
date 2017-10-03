@@ -40,7 +40,7 @@ class Seq2ParquetSpec extends FlatSpec with Matchers with BeforeAndAfter {
     cfg.input should be ("test")
   }
   "Seq2Parquet" should "work on the test seq files" in {
-    val cfg = Seq2Parquet.parse_command_line("-i test/small -p sample.seq -o tmp/test_parquet -n 4 --coalesce".split(" ")).get
+    val cfg = Seq2Parquet.parse_command_line("-i data/small -p sample.seq -o tmp/test_parquet -n 4 --coalesce".split(" ")).get
     print(s"called with arguments\n${cfg.valueTreeString}")
 
 
