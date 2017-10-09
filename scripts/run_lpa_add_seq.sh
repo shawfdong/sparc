@@ -1,7 +1,10 @@
-. `dirname $0`/config
-INPUT=tmp/${PREFIX}_lpa.txt_$K
-READS=data/${PREFIX}.seq 
-OUTPUT=tmp/${PREFIX}_lpaseq.txt_$K
+
+. `dirname $0`/load_config.sh
+
+
+READS=$INPUT
+INPUT=$OUTPUT_PREFIX/${PREFIX}_lpa.txt_$K
+OUTPUT=$OUTPUT_PREFIX/${PREFIX}_lpaseq.txt_$K
 WAIT=1
  
 CMD=`cat<<EOF

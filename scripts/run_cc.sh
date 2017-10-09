@@ -1,6 +1,7 @@
-. `dirname $0`/config
-INPUT=tmp/${PREFIX}_edges.txt
-OUTPUT=tmp/${PREFIX}_cc.txt
+
+. `dirname $0`/load_config.sh
+INPUT=$OUTPUT_PREFIX/${PREFIX}_edges.txt
+OUTPUT=$OUTPUT_PREFIX/${PREFIX}_cc.txt
 WAIT=1
 
 top_nodes_ratio=0.05

@@ -1,6 +1,7 @@
-. `dirname $0`/config
-INPUT_KMER=tmp/${PREFIX}_kc_seq_$K
-OUTPUT=tmp/${PREFIX}_kmerreads.txt_$K
+
+. `dirname $0`/load_config.sh
+INPUT_KMER=$OUTPUT_PREFIX/${PREFIX}_kc_seq_$K
+OUTPUT=$OUTPUT_PREFIX/${PREFIX}_kmerreads.txt_$K
 WAIT=1
 OPTS="-C "
 

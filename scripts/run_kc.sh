@@ -1,5 +1,7 @@
-. `dirname $0`/config
-OUTPUT=tmp/${PREFIX}_kc_seq_$K
+
+. `dirname $0`/load_config.sh
+
+OUTPUT=$OUTPUT_PREFIX/${PREFIX}_kc_seq_$K
 WAIT=1
 OPTS=-C
 

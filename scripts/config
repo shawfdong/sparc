@@ -1,4 +1,5 @@
 PREFIX=maize14G
+OUTPUT_PREFIX=tmp
 INPUT=data/${PREFIX}.seq 
 PL=5000
 ENABLE_LOG=false

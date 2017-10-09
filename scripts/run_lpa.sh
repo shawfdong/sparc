@@ -1,6 +1,7 @@
-. `dirname $0`/config
-INPUT=tmp/${PREFIX}_edges.txt_$K
-OUTPUT=tmp/${PREFIX}_lpa.txt_$K
+
+. `dirname $0`/load_config.sh
+INPUT=$OUTPUT_PREFIX/${PREFIX}_edges.txt_$K
+OUTPUT=$OUTPUT_PREFIX/${PREFIX}_lpa.txt_$K
 WAIT=1
 
 #min_shared_kmers=20
