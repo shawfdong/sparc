@@ -30,7 +30,9 @@ To run in your environment, change the versions of dependencies correspondingly 
 
     ```
     wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+    
     tar xzf sbt-0.13.15.tgz
+    
     export PATH=$PATH:./sbt/bin
     ```
     
