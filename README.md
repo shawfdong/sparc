@@ -28,9 +28,9 @@ To run in your environment, change the versions of dependencies correspondingly 
 0. install git, clone the repo
 1. download sbt and extract: 
     ```bash
-    wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
-    tar xzf sbt-0.13.15.tgz
-    export PATH=$PATH:./sbt/bin
+        wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+        tar xzf sbt-0.13.15.tgz
+        export PATH=$PATH:./sbt/bin
     ```    
 2. run "sbt package" command in sparRC directory   
     
