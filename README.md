@@ -2,7 +2,7 @@
 
 ## Summary:
 
-SpaRC is an Apache Spark-based scalable read clustering application that partitions the sequence reads based on their molecule of origin to enable downstream analysis in parallel (e.g., de novo assembly). SpaRC is designed for next generation sequencing technologies, and it produces high clustering performance on transcriptomics and metagenomics settings. SpaRC has been tested with both short read and long read sequencing technologies.
+SpaRC is an Apache Spark-based scalable read clustering application that partitions the sequence reads (transcriptomics or metagenomics) based on their molecule of origin to enable downstream analysis in parallel (e.g., de novo assembly). SpaRC is designed for Pacbio long reads but should work for Illumina pair-end reads, too. 
 
 To cite SpaRC: 
 
@@ -24,15 +24,15 @@ To run in your environment, change the versions of dependencies correspondingly 
 2. run "sbt assembly" to make the assembly jar.
 
 ## Build (AWS EMR):
+
 0. install git, clone the repo
 1. download sbt and extract: 
 
-    wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
-    
-    tar xzf sbt-0.13.15.tgz
-    
-    export PATH=$PATH:./sbt/bin
-   
+--
+wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+tar xzf sbt-0.13.15.tgz
+export PATH=$PATH:./sbt/bin
+  
 2. run "sbt package" command in sparRC directory   
     
 ## Input Format
