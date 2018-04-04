@@ -13,7 +13,7 @@ object CCAddSeq extends App with LazyLogging {
 
   case class Config(cc_file: String = "", output: String = "",
                     sleep: Int = 0, reads_input: String = "", pattern: String = "", format: String = "seq",
-                      n_partition: Int = 0)
+                      n_partition: Int = 0, num_output: Int = 18)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("AddSeq") {
@@ -42,6 +42,10 @@ object CCAddSeq extends App with LazyLogging {
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions for the input")
+
+      opt[Int]("num_output").action((x, c) =>
+        c.copy(num_output = x))
+        .text("number of paritions for the output")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
@@ -72,7 +76,7 @@ object CCAddSeq extends App with LazyLogging {
     val seqFiles = Utils.get_files(config.reads_input.trim(), config.pattern.trim())
     logger.debug(seqFiles)
     val readsRDD = KmerMapReads2.make_read_id_rdd(seqFiles, config.format, sc).map(x => (x._1.toInt, x._2))
-    val resultRDD = ccRDD.join(readsRDD).map(_._2).map(x => x._2 + "\t" + x._1.toString).coalesce(18, shuffle = false)
+    val resultRDD = ccRDD.join(readsRDD).map(_._2).map(x => x._2 + "\t" + x._1.toString).coalesce(config.num_output, shuffle = false)
     KmerCounting.delete_hdfs_file(config.output)
     resultRDD.saveAsTextFile(config.output)
 
