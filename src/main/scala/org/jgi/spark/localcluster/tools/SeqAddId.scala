@@ -39,7 +39,7 @@ object SeqAddId extends App with LazyLogging {
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
 
-    sc.textFile(config.in).coalesce(config.n_partition, shuffle = config.shuffle).zipWithIndex().map(u=>u._2.toString+"\t"+u._1).saveAsTextFile(config.output)
+    sc.textFile(config.in).coalesce(config.n_partition, shuffle = config.shuffle).zipWithIndex().map(u=>u._2.toInt.toString+"\t"+u._1).saveAsTextFile(config.output)
 
     logger.info(s"save results to ${config.output}")
 
