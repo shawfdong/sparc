@@ -12,7 +12,7 @@ import sext._
 object SeqAddId extends App with LazyLogging {
 
   case class Config(in: String = "", output: String = "",
-                    n_partition: Int = 1, shuffle: Boolean = true)
+                    n_partition: Int = -1, shuffle: Boolean = false)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("Repartition") {
@@ -24,7 +24,7 @@ object SeqAddId extends App with LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output file")
 
-      opt[Int]('n', "n_partition").required().action((x, c) =>
+      opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions of output")
 
@@ -38,8 +38,9 @@ object SeqAddId extends App with LazyLogging {
 
     val start = System.currentTimeMillis
     logger.info(new java.util.Date(start) + ": Program started ...")
+    val rdd = if (config.n_partition<1) sc.textFile(config.in) else sc.textFile(config.in).coalesce(config.n_partition, shuffle = config.shuffle)
 
-    sc.textFile(config.in).coalesce(config.n_partition, shuffle = config.shuffle).zipWithIndex().map(u=>u._2.toInt.toString+"\t"+u._1).saveAsTextFile(config.output)
+    rdd.zipWithIndex().map(u=>u._2.toInt.toString+"\t"+u._1).saveAsTextFile(config.output)
 
     logger.info(s"save results to ${config.output}")
 
