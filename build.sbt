@@ -1,1 +1,1 @@
-build.sbt.spark2.12
+build.sbt.spark2.30
