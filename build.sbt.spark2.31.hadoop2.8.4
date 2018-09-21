@@ -2,7 +2,7 @@
 lazy val root = (project in file(".")).
   settings(
     name := "LocalCluster",
-    version := "0.1",
+    version := "0.2",
     scalaVersion := "2.11.8",
     test in assembly := {},
     testOptions in Test := Seq(Tests.Filter(s => !s.contains("Redis"))),
@@ -54,8 +54,10 @@ libraryDependencies ++= Seq(
   "org.scalatest" % "scalatest_2.11" % "2.2.2" % "provided",
   "com.holdenkarau" % "spark-testing-base_2.11" % "2.2.0_0.7.2" % "provided",
   "org.openjdk.jmh" % "jmh-core" % "1.19"  % "provided"
-
 )
+
+excludeDependencies += "ch.qos.logback" % "logback-classic"
+excludeDependencies += "org.slf4j" % "slf4j-simple"
 
 PB.targets in Compile := Seq(
   scalapb.gen(grpc = true, flatPackage = true) -> (sourceManaged in Compile).value
