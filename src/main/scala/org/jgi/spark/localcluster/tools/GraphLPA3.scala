@@ -89,7 +89,7 @@ object GraphLPA3 extends App with LazyLogging {
   def lpa_dataframe(edgeTuples: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int) = {
 
 
-    val cc = MyLPA.run(edgeTuples, sqlContext,max_iteration)
+    val cc = MyLPA.run(edgeTuples, sqlContext,max_iteration,checkpoint_dir)
     val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
     clusters
   }
@@ -123,12 +123,15 @@ object GraphLPA3 extends App with LazyLogging {
 
   }
 
+  def checkpoint_dir= {
+    System.getProperty("java.io.tmpdir")
+  }
+
   def run(config: Config, spark: SparkSession): Long = {
 
     val sc = spark.sparkContext
     val sqlContext = spark.sqlContext
-
-    sc.setCheckpointDir(System.getProperty("java.io.tmpdir"))
+    sc.setCheckpointDir(checkpoint_dir)
 
     val start = System.currentTimeMillis
     logInfo(new java.util.Date(start) + ": Program started ...")
@@ -170,7 +173,7 @@ object GraphLPA3 extends App with LazyLogging {
 
 
   override def main(args: Array[String]) {
-    val APPNAME = "GraphLPA2"
+    val APPNAME = "GraphLPA3"
 
     val options = parse_command_line(args)
 
