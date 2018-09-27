@@ -6,23 +6,24 @@ package org.jgi.spark.localcluster.tools
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.storage.StorageLevel
-import org.jgi.spark.localcluster.{DNASeq, MyLPA, Utils}
+import org.jgi.spark.localcluster.{DBManagerSingleton, DNASeq, Utils}
 import sext._
 
 
-object GraphLPA3 extends App with LazyLogging {
+object EdgeOverlapFilter extends App with LazyLogging {
 
 
-  case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2, max_iteration: Int = 10,
-                    n_output_blocks: Int = 180,
-                    min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
+  case class Config(edge_file: String = "", output: String = "", db: String = "",
+                    min_overlap: Int = 31, err_rate: Float = 0f,
+                    n_output_blocks: Int = 0, sleep: Int = 0,
+                    min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, min_shared_kmers: Int = 2,
                     n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config]("GraphLPA3") {
-      head("GraphLPA3", Utils.VERSION)
+    val parser = new scopt.OptionParser[Config]("EdgeOverlapFilter") {
+      head("EdgeOverlapFilter", Utils.VERSION)
 
       opt[String]('i', "edge_file").required().valueName("<file>").action((x, c) =>
         c.copy(edge_file = x)).text("files of graph edges. e.g. output from GraphGen")
@@ -30,18 +31,24 @@ object GraphLPA3 extends App with LazyLogging {
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output file")
 
+      opt[String]("db").required().valueName("<dir>").action((x, c) =>
+        c.copy(db = x)).text("rocksdb for the sequences, must be distributed on each node")
+
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
-        .text("paritions for the input")
+        .text("partitions for the input")
 
 
-      opt[Int]("max_iteration").action((x, c) =>
-        c.copy(max_iteration = x))
-        .text("max ietration for LPA")
+      opt[Int]("min_overlap").action((x, c) =>
+        c.copy(min_overlap = x)).
+        validate(x =>
+          if (x > 1) success
+          else failure("min_overlap should be greater than 2"))
+        .text("min_overlap between 2 reads")
 
       opt[Int]("wait").action((x, c) =>
         c.copy(sleep = x))
-        .text("wait $slep second before stop spark session. For debug purpose, default 0.")
+        .text("wait $sleep second before stop spark session. For debug purpose, default 0.")
 
 
       opt[Int]("n_output_blocks").action((x, c) =>
@@ -50,6 +57,13 @@ object GraphLPA3 extends App with LazyLogging {
           if (x >= 1) success
           else failure("n_output_blocks should be greater than 0"))
         .text("output block number")
+
+      opt[Double]("err_rate").action((x, c) =>
+        c.copy(err_rate = x.toFloat)).
+        validate(x =>
+          if (x >= 0 && x < 0.5) success
+          else failure("err_rate should be greater than 0 and less than 0.5"))
+        .text("error rate in seq")
 
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
@@ -65,7 +79,6 @@ object GraphLPA3 extends App with LazyLogging {
           else failure("max_shared_kmers should be greater than 1"))
         .text("max number of kmers that two reads share")
 
-
       opt[Int]("min_reads_per_cluster").action((x, c) =>
         c.copy(min_reads_per_cluster = x))
         .text("minimum reads per cluster")
@@ -77,61 +90,43 @@ object GraphLPA3 extends App with LazyLogging {
   }
 
 
-  def lpa(edgeTuples: RDD[(Int, Int)], config: Config, sqlContext: SQLContext) = {
-    lpa_dataframe(edgeTuples, sqlContext, config.max_iteration)
-  }
-
-
-  def lpa_dataframe(edgeTuples: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int) = {
-
-
-    val cc = MyLPA.run(edgeTuples, sqlContext, max_iteration, checkpoint_dir)
-    val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
-    clusters
-  }
-
   def logInfo(str: String) = {
     logger.info(str)
-    println("AAAA " + str)
   }
 
-  protected def run_lpa(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
-                        n_reads: Long) = {
-    val sqlContext = spark.sqlContext
+  def fetch_seq(seqid: Int, dbfile: String): String = {
+    DBManagerSingleton.instance(dbfile).get(seqid)
+  }
 
-    val edgeTuples = all_edges.flatMap {
+  def calc_overlap(seq1_id: Int, seq2_id: Int, min_overlap: Int, err_rate: Float, dbfile: String): Int = {
+    val seq1: String = fetch_seq(seq1_id, dbfile)
+    val seq2: String = fetch_seq(seq2_id, dbfile)
+    //println(seq1,seq2,min_overlap,err_rate)
+    net.sparc.sparc.sequence_overlap(seq1.toString, seq2.toString, min_overlap, err_rate)
+  }
+
+  protected def run_overlap(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
+                            n_reads: Long) = {
+    val filtered = all_edges.map {
       x =>
-        List((x(0), x(1)), (x(1), x(0)))
-    }
+        val score: Int = calc_overlap(x(0), x(1), config.min_overlap, config.err_rate, config.db)
 
-    logInfo(s"loaded ${edgeTuples.count}/2 edges")
+        Array(x(0), x(1), score)
+    }.filter(_ (2) > 0).persist(StorageLevel.MEMORY_AND_DISK_SER)
 
-    val clusters = this.lpa(edgeTuples, config, sqlContext).map(_.swap)
-    clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
-    logInfo(s"#records=${clusters.count} are persisted")
+    logInfo(s"After filtering, #records=${filtered.count} are persisted")
 
-    val final_clusters =
-      clusters.groupByKey.filter(_._2.size >= config.min_reads_per_cluster).map(u => (u._1, u._2.toSeq))
-    final_clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
-    logInfo(s"Got ${final_clusters.count} clusters")
-    clusters.unpersist(blocking = false)
-    final_clusters
-
+    filtered
   }
 
-  def checkpoint_dir = {
-    System.getProperty("java.io.tmpdir")
-  }
 
   def run(config: Config, spark: SparkSession): Long = {
 
     val sc = spark.sparkContext
-    val sqlContext = spark.sqlContext
-    sc.setCheckpointDir(checkpoint_dir)
 
     val start = System.currentTimeMillis
     logInfo(new java.util.Date(start) + ": Program started ...")
-
+    net.sparc.Info.load_native()
     val edges =
       (if (config.n_partition > 0)
         sc.textFile(config.edge_file).repartition(config.n_partition)
@@ -147,13 +142,15 @@ object GraphLPA3 extends App with LazyLogging {
 
     val n_reads = edges.flatMap(x => x).distinct().count()
     logInfo(s"total #reads = $n_reads")
-    val final_clusters = run_lpa(edges, config, spark, n_reads)
+
+
+    val filtered_edges = run_overlap(edges, config, spark, n_reads)
     KmerCounting.delete_hdfs_file(config.output)
 
-    val result = final_clusters.map(_._2.toList.sorted)
-      .map(_.mkString(","))
+    val result = filtered_edges.map(_.mkString(","))
 
-    result.repartition(config.n_output_blocks).saveAsTextFile(config.output)
+    (if (config.n_output_blocks > 0) result.repartition(config.n_output_blocks) else result)
+      .saveAsTextFile(config.output)
     val result_count = sc.textFile(config.output).count
     logInfo(s"total #records=${result_count} save results to ${config.output}")
 
@@ -162,14 +159,14 @@ object GraphLPA3 extends App with LazyLogging {
 
     // may be have the bug as https://issues.apache.org/jira/browse/SPARK-15002
     edges.unpersist(blocking = false)
-    final_clusters.unpersist(blocking = false)
+    filtered_edges.unpersist(blocking = false)
 
     result_count
   }
 
 
   override def main(args: Array[String]) {
-    val APPNAME = "GraphLPA3"
+    val APPNAME = "EdgeOverlapFilter"
 
     val options = parse_command_line(args)
 

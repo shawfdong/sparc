@@ -47,7 +47,7 @@ object MyLPA extends LazyLogging {
         //df.where($"changed" === true).show(10)
 
         val cnt = df.agg(sum(col("changed").cast("long"))).first.get(0)
-        logInfo(s"${cnt} edges changed it's cluster at iteration ${i}")
+        logInfo(s"${cnt} edges changed their clusters at iteration ${i}")
         if (cnt == 0) {
           logInfo(s"Stop at iteration ${i}")
           break

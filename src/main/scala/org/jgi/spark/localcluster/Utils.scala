@@ -88,4 +88,9 @@ object Utils {
       (ip, port)
     }
   }
+
+
+  def toByteArray(value: Int): Array[Byte] = {
+    Array[Byte]((value >> 24).toByte, (value >> 16).toByte, (value >> 8).toByte, value.toByte)
+  }
 }
