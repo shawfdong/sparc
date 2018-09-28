@@ -17,7 +17,7 @@ object KmerMapReads2 extends App with LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
-                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = true, use_native: Boolean = false,
+                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false, use_native: Boolean = false,
                     n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
