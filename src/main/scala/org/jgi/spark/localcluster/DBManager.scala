@@ -33,6 +33,9 @@ class DBManager(val dbpath: String) extends LazyLogging {
 
   def get(key: Int): String = {
     val v = db.get(Utils.toByteArray(key))
+    if (v==null) {
+      throw  new Exception("key not found: "+key)
+    }
     ByteString.copyFrom(v).toStringUtf8
   }
 }

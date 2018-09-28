@@ -17,7 +17,7 @@ object KmerMapReads2 extends App with LazyLogging {
 
   case class Config(reads_input: String = "", kmer_input: String = "", output: String = "", pattern: String = "",
                     _contamination: Double = 0.00005, n_iteration: Int = 1, k: Int = -1, min_kmer_count: Int = 2, sleep: Int = 0,
-                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = false,
+                    max_kmer_count: Int = 200, format: String = "seq", canonical_kmer: Boolean = true, use_native: Boolean = false,
                     n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -47,6 +47,9 @@ object KmerMapReads2 extends App with LazyLogging {
 
       opt[Unit]('C', "canonical_kmer").action((_, c) =>
         c.copy(canonical_kmer = true)).text("apply canonical kmer")
+
+      opt[Unit]("use_native").action((_, c) =>
+        c.copy(use_native = true)).text("use native c++ lib")
 
       opt[Double]('c', "contamination").action((x, c) =>
         c.copy(_contamination = x)).
@@ -169,7 +172,16 @@ object KmerMapReads2 extends App with LazyLogging {
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], topNKmser: RDD[(DNASeq, Boolean)],
                                 config: Config, sc: SparkContext) = {
 
-    val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
+    val kmer_gen_fun = (seq: String) => {
+      if (config.use_native) {
+        cKmer.generate_kmer(seq = seq, k = config.k, config.canonical_kmer)
+      } else {
+        if (config.canonical_kmer)
+          Kmer.generate_kmer(seq = seq, k = config.k)
+        else
+          Kmer2.generate_kmer(seq = seq, k = config.k)
+      }
+    }
 
     val kmer_reads = {
       val kmer_reads_filtered = readsRDD.mapPartitions {

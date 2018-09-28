@@ -8,12 +8,11 @@ import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.storage.StorageLevel
-import org.jgi.spark.localcluster.{DBManagerSingleton, DNASeq, Utils}
+import org.jgi.spark.localcluster.{DBManagerSingleton, DNASeq, Utils, cKmer}
 import sext._
 
 
 object EdgeOverlapFilter extends App with LazyLogging {
-
 
   case class Config(edge_file: String = "", output: String = "", db: String = "",
                     min_overlap: Int = 31, err_rate: Float = 0f,
@@ -102,7 +101,7 @@ object EdgeOverlapFilter extends App with LazyLogging {
     val seq1: String = fetch_seq(seq1_id, dbfile)
     val seq2: String = fetch_seq(seq2_id, dbfile)
     //println(seq1,seq2,min_overlap,err_rate)
-    net.sparc.sparc.sequence_overlap(seq1.toString, seq2.toString, min_overlap, err_rate)
+    cKmer.sequence_overlap(seq1.toString, seq2.toString, min_overlap, err_rate)
   }
 
   protected def run_overlap(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
@@ -126,7 +125,6 @@ object EdgeOverlapFilter extends App with LazyLogging {
 
     val start = System.currentTimeMillis
     logInfo(new java.util.Date(start) + ": Program started ...")
-    net.sparc.Info.load_native()
     val edges =
       (if (config.n_partition > 0)
         sc.textFile(config.edge_file).repartition(config.n_partition)
