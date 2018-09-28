@@ -17,7 +17,7 @@ object EdgeOverlapFilter extends App with LazyLogging {
   case class Config(edge_file: String = "", output: String = "", db: String = "",
                     min_overlap: Int = 31, err_rate: Float = 0f,
                     n_output_blocks: Int = 0, sleep: Int = 0,
-                    min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, min_shared_kmers: Int = 2,
+                    max_shared_kmers: Int = 20000, min_shared_kmers: Int = 2,
                     n_partition: Int = 0)
 
   def parse_command_line(args: Array[String]): Option[Config] = {
@@ -77,10 +77,6 @@ object EdgeOverlapFilter extends App with LazyLogging {
           if (x >= 1) success
           else failure("max_shared_kmers should be greater than 1"))
         .text("max number of kmers that two reads share")
-
-      opt[Int]("min_reads_per_cluster").action((x, c) =>
-        c.copy(min_reads_per_cluster = x))
-        .text("minimum reads per cluster")
 
       help("help").text("prints this usage text")
 

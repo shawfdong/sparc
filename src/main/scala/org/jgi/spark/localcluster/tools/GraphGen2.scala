@@ -7,13 +7,14 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
-import org.jgi.spark.localcluster.Utils
+import org.jgi.spark.localcluster.{Utils, cKmer}
 import sext._
 
 object GraphGen2 extends App with LazyLogging {
 
   case class Config(kmer_reads: String = "", output: String = "", max_degree: Int = 100,
                     n_iteration: Int = 1, min_shared_kmers: Int = 2, sleep: Int = 0,
+                    use_native: Boolean = false,
                     n_partition: Int = 0)
 
 
@@ -44,6 +45,9 @@ object GraphGen2 extends App with LazyLogging {
           if (x >= 1) success
           else failure("min_shared_kmers should be greater than 1"))
         .text("minimum number of kmers that two reads share")
+
+      opt[Unit]("use_native").action((_, c) =>
+        c.copy(use_native = true)).text("use native c++ lib")
 
 
       opt[Int]('n', "n_partition").action((x, c) =>
@@ -79,7 +83,14 @@ object GraphGen2 extends App with LazyLogging {
   }
 
   private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
-    val edges = kmer_reads.map(u => generate_edges(u, config.max_degree).map(x => if (x._1 <= x._2) x else x.swap).filter {
+    val generate_edges_fun = (reads: Array[Int]) => {
+      if (config.use_native) {
+        cKmer.generate_edges(reads, config.max_degree)
+      } else {
+        generate_edges(reads, config.max_degree)
+      }
+    }
+    val edges = kmer_reads.map(u => generate_edges_fun(u).map(x => if (x._1 <= x._2) x else x.swap).filter {
       case a =>
         Utils.pos_mod((a._1 + a._2).toInt, config.n_iteration) == i
     }).flatMap(x => x)
@@ -91,7 +102,6 @@ object GraphGen2 extends App with LazyLogging {
     rdd
 
   }
-
 
   private def process_iteration(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
 

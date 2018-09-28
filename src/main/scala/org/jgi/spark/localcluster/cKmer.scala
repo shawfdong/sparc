@@ -18,4 +18,15 @@ object cKmer {
 
   def sequence_overlap(seq1: String, seq2: String, min_over_lap: Int, err_rate: Float) =
     sparc.sequence_overlap(seq1,seq2,min_over_lap,err_rate)
+
+  def generate_edges(reads: Array[Int], max_degree: Int) = {
+    val v = new net.sparc.intVector(reads.length)
+    (0 until reads.length).foreach(i=>v.set(i,reads(i)))
+    val results = sparc.generate_edges(v, max_degree);
+    (0 until results.size().toInt).map{
+      i=>
+        val a = results.get(i)
+        (a.getFirst, a.getSecond)
+    }
+  }
 }

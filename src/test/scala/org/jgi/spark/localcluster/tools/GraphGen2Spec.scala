@@ -22,6 +22,14 @@ class GraphGen2Spec extends FlatSpec with Matchers with BeforeAndAfter with Shar
 
     GraphGen2.run(cfg, sc)
   }
+  "graph gen" should "work on the test seq files with native lib" in {
+    val cfg = GraphGen2.parse_command_line(
+      "-i data/kmermapping_test.txt -o tmp/graph_gen2_test_native.txt --n_iteration 1 --use_native".split(" ")
+        .filter(_.nonEmpty)).get
+    println(s"called with arguments\n${cfg.valueTreeString}")
+
+    GraphGen2.run(cfg, sc)
+  }
 
   "graph gen" should "work on the test seq files for multiple iterations" in {
     val cfg = GraphGen2.parse_command_line(
