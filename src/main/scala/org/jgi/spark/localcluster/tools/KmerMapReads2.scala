@@ -174,7 +174,7 @@ object KmerMapReads2 extends App with LazyLogging {
 
     val kmer_gen_fun = (seq: String) => {
       if (config.use_native) {
-        cKmer.generate_kmer(seq = seq, k = config.k, config.canonical_kmer)
+        cKmer.generate_kmer(seq = seq, k = config.k, is_canonical = config.canonical_kmer)
       } else {
         if (config.canonical_kmer)
           Kmer.generate_kmer(seq = seq, k = config.k)
