@@ -17,7 +17,7 @@ object GraphLPA3 extends App with LazyLogging {
 
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2, max_iteration: Int = 10,
-                    n_output_blocks: Int = 180,
+                    n_output_blocks: Int = 180, weight: String = "none",
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     n_partition: Int = 0)
 
@@ -30,6 +30,13 @@ object GraphLPA3 extends App with LazyLogging {
 
       opt[String]('o', "output").required().valueName("<dir>").action((x, c) =>
         c.copy(output = x)).text("output file")
+
+      opt[String]("weight").valueName("weight").action((x, c) =>
+        c.copy(weight = x)).
+        validate(x =>
+          if (Seq("none", "edge", "logedge").contains(x.toLowerCase)) success
+          else failure("should be one of <none|edge|logedge>"))
+        .text("weight schema. <none|edge|logedge>")
 
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
@@ -78,8 +85,14 @@ object GraphLPA3 extends App with LazyLogging {
   }
 
 
-  def lpa(edgeTuples: RDD[(Int, Int)], config: Config, sqlContext: SQLContext) = {
-    val (cc, checkpoint) = LPA.run(edgeTuples, sqlContext, config.max_iteration, checkpoint_dir)
+  def lpa_noweight(edgeTuples: RDD[(Int, Int)], config: Config, sqlContext: SQLContext) = {
+    val (cc, checkpoint) = LPA.run_wo_weights(edgeTuples, sqlContext, config.max_iteration, checkpoint_dir)
+    val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
+    (clusters, checkpoint)
+  }
+
+  def lpa_weight(edgeTuples: RDD[(Int, Int, Float)], config: Config, sqlContext: SQLContext) = {
+    val (cc, checkpoint) = LPA.run_with_weights(edgeTuples, sqlContext, config.max_iteration, checkpoint_dir)
     val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
     (clusters, checkpoint)
   }
@@ -87,22 +100,33 @@ object GraphLPA3 extends App with LazyLogging {
 
   def logInfo(str: String) = {
     logger.info(str)
-    println("AAAA " + str)
   }
 
   protected def run_lpa(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
                         n_reads: Long) = {
     val sqlContext = spark.sqlContext
 
-    val edgeTuples = all_edges.flatMap {
-      x =>
-        List((x(0), x(1)), (x(1), x(0)))
+    val (tmp_clusters, checkpoint) = if (config.weight.toLowerCase == "none") {
+      val edgeTuples =
+        all_edges.flatMap {
+          x =>
+            List((x(0), x(1)), (x(1), x(0)))
+        }
+      lpa_noweight(edgeTuples, config, sqlContext)
+    } else {
+      val weight_fun = if (config.weight.toLowerCase == "edge")
+        (x: Int) => x.toFloat
+      else
+        (x: Int) => math.log(x).toFloat
+      val edgeTuples =
+        all_edges.flatMap {
+          x =>
+            List((x(0), x(1), weight_fun(x(2))), (x(1), x(0), weight_fun(x(2))))
+        }
+      lpa_weight(edgeTuples, config, sqlContext)
     }
 
-    logInfo(s"loaded ${edgeTuples.count}/2 edges")
-
-    val (tmpclusters, checkpoint) = this.lpa(edgeTuples, config, sqlContext)
-    val clusters = tmpclusters.map(_.swap)
+    val clusters = tmp_clusters.map(_.swap)
     clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logInfo(s"#records=${clusters.count} are persisted")
 
@@ -129,15 +153,15 @@ object GraphLPA3 extends App with LazyLogging {
     val start = System.currentTimeMillis
     logInfo(new java.util.Date(start) + ": Program started ...")
 
-    val edges =
+    val tmp_edges =
       (if (config.n_partition > 0)
         sc.textFile(config.edge_file).repartition(config.n_partition)
       else
         sc.textFile(config.edge_file)).
         map { line =>
           line.split(",").map(_.toInt)
-        }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers).map(_.take(2))
-
+        }.filter(x => x(2) >= config.min_shared_kmers && x(2) <= config.max_shared_kmers)
+    val edges = if (config.weight.toLowerCase == "none") tmp_edges.map(x => x.take(2)) else tmp_edges
     edges.cache()
     logInfo("loaded %d edges".format(edges.count))
     edges.take(5).map(_.mkString(",")).foreach(println)

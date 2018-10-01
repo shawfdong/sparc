@@ -6,12 +6,12 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
+import org.apache.spark.sql.types.{FloatType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 
 import scala.util.control.Breaks.{break, breakable}
 
-class LPA(val checkpoint_dir: String) extends LazyLogging {
+class LPA(val checkpoint_dir: String, val has_weight: Boolean) extends LazyLogging {
 
   val checkpoint = new Checkpoint("LPA", checkpoint_dir)
 
@@ -47,8 +47,14 @@ class LPA(val checkpoint_dir: String) extends LazyLogging {
 
 
   def make_clusters(df: Dataset[Row]): Dataset[Row] = {
-    val cnts = df.groupBy("dest", "cid").agg(count("changed").alias("cnt"))
-    val w = Window.partitionBy(col("dest")).orderBy(col("cnt").desc, col("cid"))
+    val cnts =
+      if (has_weight) {
+        df.groupBy("dest", "cid").agg(sum("weight").alias("sumweight"))
+      } else {
+        df.groupBy("dest", "cid").agg(count("changed").alias("sumweight"))
+      }
+    val w = Window.partitionBy(col("dest"))
+      .orderBy(col("sumweight").desc, col("cid"))
 
     val df2: DataFrame = cnts.withColumn("rn", row_number.over(w))
       .where(col("rn") === 1)
@@ -67,7 +73,11 @@ class LPA(val checkpoint_dir: String) extends LazyLogging {
     val newdf = df.join(df2, $"src" === $"node_id")
       .withColumn("new_changed", !($"cid" === $"new_cid"))
 
-    val newdf2 = newdf.select("src", "dest", "new_cid", "new_changed")
+    val newdf2 = (if (!has_weight)
+      newdf.select("src", "dest", "new_cid", "new_changed")
+    else
+      newdf.select("src", "dest", "weight", "new_cid", "new_changed")
+      )
       .withColumnRenamed("new_cid", "cid")
       .withColumnRenamed("new_changed", "changed")
 
@@ -79,9 +89,9 @@ class LPA(val checkpoint_dir: String) extends LazyLogging {
 object LPA extends LazyLogging {
 
   //return node,cluster pair
-  def run(edges: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int,
-          checkpoint_dir: String): (RDD[(Int, Int)], Checkpoint) = {
-    val lpa = new LPA(checkpoint_dir)
+  def run_wo_weights(edges: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int,
+                     checkpoint_dir: String): (RDD[(Int, Int)], Checkpoint) = {
+    val lpa = new LPA(checkpoint_dir, false)
     val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
@@ -95,4 +105,24 @@ object LPA extends LazyLogging {
     val rawdf = spark.createDataFrame(edgeTuples.map { u => Row.fromTuple(u) }, schema)
     lpa.run(rawdf, sqlContext, max_iteration)
   }
+
+  //return node,cluster pair
+  def run_with_weights(edges: RDD[(Int, Int, Float)], sqlContext: SQLContext, max_iteration: Int,
+                       checkpoint_dir: String): (RDD[(Int, Int)], Checkpoint) = {
+    val lpa = new LPA(checkpoint_dir, true)
+    val spark = sqlContext.sparkSession
+
+    require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
+
+    // add self linked edges
+    val selfEdges = edges.map(_._1).distinct().map(u => (u, u, 1f))
+    val edgeTuples = edges.union(selfEdges)
+    val schema = new StructType()
+      .add(StructField("src", IntegerType, false))
+      .add(StructField("dest", IntegerType, false))
+      .add(StructField("weight", FloatType, false))
+    val rawdf = spark.createDataFrame(edgeTuples.map { u => Row.fromTuple(u) }, schema)
+    lpa.run(rawdf, sqlContext, max_iteration)
+  }
+
 }
