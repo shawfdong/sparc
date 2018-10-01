@@ -4,11 +4,12 @@
 package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
+import net.sparc.graph.LPA
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
-import org.jgi.spark.localcluster.{DNASeq, MyLPA, Utils}
+import org.jgi.spark.localcluster.{DNASeq, Utils}
 import sext._
 
 
@@ -78,17 +79,11 @@ object GraphLPA3 extends App with LazyLogging {
 
 
   def lpa(edgeTuples: RDD[(Int, Int)], config: Config, sqlContext: SQLContext) = {
-    lpa_dataframe(edgeTuples, sqlContext, config.max_iteration)
-  }
-
-
-  def lpa_dataframe(edgeTuples: RDD[(Int, Int)], sqlContext: SQLContext, max_iteration: Int) = {
-
-
-    val cc = MyLPA.run(edgeTuples, sqlContext, max_iteration, checkpoint_dir)
+    val (cc, checkpoint) = LPA.run(edgeTuples, sqlContext, config.max_iteration, checkpoint_dir)
     val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
-    clusters
+    (clusters, checkpoint)
   }
+
 
   def logInfo(str: String) = {
     logger.info(str)
@@ -106,7 +101,8 @@ object GraphLPA3 extends App with LazyLogging {
 
     logInfo(s"loaded ${edgeTuples.count}/2 edges")
 
-    val clusters = this.lpa(edgeTuples, config, sqlContext).map(_.swap)
+    val (tmpclusters, checkpoint) = this.lpa(edgeTuples, config, sqlContext)
+    val clusters = tmpclusters.map(_.swap)
     clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logInfo(s"#records=${clusters.count} are persisted")
 
@@ -115,6 +111,7 @@ object GraphLPA3 extends App with LazyLogging {
     final_clusters.persist(StorageLevel.MEMORY_AND_DISK_SER)
     logInfo(s"Got ${final_clusters.count} clusters")
     clusters.unpersist(blocking = false)
+    checkpoint.remove_all()
     final_clusters
 
   }
