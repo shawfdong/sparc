@@ -83,13 +83,13 @@ object GraphGen2 extends App with LazyLogging {
   }
 
   private def process_iteration_spark(i: Int, kmer_reads: RDD[Array[Int]], config: Config, sc: SparkContext): RDD[(Int, Int, Int)] = {
-    val generate_edges_fun = (reads: Array[Int]) => {
+    val generate_edges_fun =
       if (config.use_native) {
-        cKmer.generate_edges(reads, config.max_degree)
+        (reads: Array[Int]) => cKmer.generate_edges(reads, config.max_degree)
       } else {
-        generate_edges(reads, config.max_degree)
+        (reads: Array[Int]) => generate_edges(reads, config.max_degree)
       }
-    }
+
     val edges = kmer_reads.map(u => generate_edges_fun(u).map(x => if (x._1 <= x._2) x else x.swap).filter {
       case a =>
         Utils.pos_mod((a._1 + a._2).toInt, config.n_iteration) == i

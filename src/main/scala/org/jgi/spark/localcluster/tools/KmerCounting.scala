@@ -94,7 +94,10 @@ object KmerCounting extends App with LazyLogging {
 
 
   private def process_iteration(i: Int, readsRDD: RDD[String], config: Config, sc: SparkContext) = {
-    val kmer_gen_fun = (seq: String) => if (config.canonical_kmer) Kmer.generate_kmer(seq = seq, k = config.k) else Kmer2.generate_kmer(seq = seq, k = config.k)
+    val kmer_gen_fun = if (config.canonical_kmer)
+      (seq: String) =>  Kmer.generate_kmer(seq = seq, k = config.k)
+    else
+      (seq: String) =>  Kmer2.generate_kmer(seq = seq, k = config.k)
     val smallKmersRDD =
       process_iteration_spark(i, readsRDD, config, kmer_gen_fun)
 

@@ -172,15 +172,13 @@ object KmerMapReads2 extends App with LazyLogging {
   private def process_iteration(i: Int, readsRDD: RDD[(Long, String)], topNKmser: RDD[(DNASeq, Boolean)],
                                 config: Config, sc: SparkContext) = {
 
-    val kmer_gen_fun = (seq: String) => {
-      if (config.use_native) {
-        cKmer.generate_kmer(seq = seq, k = config.k, is_canonical = config.canonical_kmer)
-      } else {
-        if (config.canonical_kmer)
-          Kmer.generate_kmer(seq = seq, k = config.k)
-        else
-          Kmer2.generate_kmer(seq = seq, k = config.k)
-      }
+    val kmer_gen_fun = if (config.use_native) {
+      (seq: String) => cKmer.generate_kmer(seq = seq, k = config.k, is_canonical = config.canonical_kmer)
+    } else {
+      if (config.canonical_kmer)
+        (seq: String) => Kmer.generate_kmer(seq = seq, k = config.k)
+      else
+        (seq: String) => Kmer2.generate_kmer(seq = seq, k = config.k)
     }
 
     val kmer_reads = {
