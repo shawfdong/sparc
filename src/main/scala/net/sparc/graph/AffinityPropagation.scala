@@ -161,19 +161,6 @@ class AffinityPropagation(val checkpoint_dir: String, val damping: Float, val co
 
 }
 
-object TupleUDFs {
-
-  import org.apache.spark.sql.functions.udf
-  // type tag is required, as we have a generic udf
-  import scala.reflect.runtime.universe.{TypeTag, typeTag}
-
-  def toTuple2[S: TypeTag, T: TypeTag] =
-    udf[(S, T), S, T]((x: S, y: T) => (x, y))
-
-  def toTuple4[S: TypeTag, T: TypeTag, U: TypeTag, V: TypeTag] =
-    udf[(S, T, U, V), S, T, U, V]((x: S, y: T, u: U, v: V) => (x, y, u, v))
-}
-
 object AffinityPropagation extends LazyLogging {
 
   // Scala median function
