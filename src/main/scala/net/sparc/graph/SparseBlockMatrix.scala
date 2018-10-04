@@ -11,21 +11,11 @@ import scala.collection.mutable.ListBuffer
 
 
 class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n_col_block: Int,
-                        val max_row: Int, val max_col: Int, val sparkSession: SparkSession, val sparse: String = "CSC")
+                        val max_row: Int, val max_col: Int, val sparkSession: SparkSession)
   extends Serializable {
 
 
-  val helper: SparseMatrixHelper = {
-    val matrix =
-      if (sparse.toUpperCase == "CSC") {
-        new CSCSparseMatrixHelper
-      } else if (sparse.toUpperCase == "CSC") {
-        new DCSCSparseMatrixHelper
-      } else {
-        throw new Exception("Unknown " + sparse);
-      }
-    matrix
-  }
+  val helper = new CSCSparseMatrixHelper
 
   def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
     val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]

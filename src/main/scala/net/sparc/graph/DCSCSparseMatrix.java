@@ -12,6 +12,14 @@ public class DCSCSparseMatrix extends AbstractCSCSparseMatrix {
     private transient int[] _colPtrs = null;
 
 
+    public int[] getColPtrPtrs() {
+        return colPtrPtrs;
+    }
+
+    public int[] getColPtrRepetition() {
+        return colPtrRepetition;
+    }
+
     public DCSCSparseMatrix(){
 
     }
