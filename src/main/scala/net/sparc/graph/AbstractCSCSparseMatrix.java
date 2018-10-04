@@ -99,7 +99,7 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
     }
 
 
-    public AbstractCSCSparseMatrix makeSparseMatrix(int m, int n, int[] row, int[] col, float[] val) throws Exception {
+    public AbstractCSCSparseMatrix makeSparseMatrix(int m, int n, int[] row, int[] col, float[] val) {
         ArrayList<COOItem> lst = new ArrayList<COOItem>();
         for (int i = 0; i < row.length; i++) {
             lst.add(new COOItem(row[i], col[i], val[i]));
@@ -437,6 +437,33 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         return this.divide(this.sum_by_col());
     }
 
+    public AbstractCSCSparseMatrix prune(float threshold) {
+        boolean need_compact = false;
+        for (int i = 0; i < values.length; i++) {
+            if (Math.abs(values[i]) <= threshold) {
+                values[i] = 0f;
+                need_compact = true;
+            }
+        }
+        if (need_compact)
+            return compact();
+        else
+            return this;
+    }
+
+    public AbstractCSCSparseMatrix compact() {
+        ArrayList<COOItem> lst = new ArrayList<>();
+
+        Iterator<COOItem> itor;
+        for (itor = iterator(); itor.hasNext(); ) {
+            COOItem item = itor.next();
+            if (Math.abs(item.v) > 1e-7) {
+                lst.add(item);
+            }
+        }
+
+        return internal_fromCOOItemArray(numRows, numCols, lst);
+    }
 
     public AbstractCSCSparseMatrix sum_by_col() {
         Iterator<COOItem> itor1 = this.iterator();

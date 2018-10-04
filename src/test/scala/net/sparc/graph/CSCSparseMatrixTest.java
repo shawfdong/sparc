@@ -289,7 +289,7 @@ public class CSCSparseMatrixTest {
     }
 
     @Test
-    public void sum_by_col() throws Exception {
+    public void sum_by_col() {
 
         if (true) { //normal sparse matrix
             CSCSparseMatrix mat2 = null;
@@ -312,6 +312,33 @@ public class CSCSparseMatrixTest {
             assertArrayEquals(new float[]{4, -7, 11, 5}, mat3.toArray(), 1e-9f);
 
             assertEquals(4, mat3.nnz());
+
+        }
+
+    }
+
+    @Test
+    public void prune() {
+
+        if (true) { //normal sparse matrix
+            CSCSparseMatrix mat2 = null;
+
+            {
+                int[] row = {0, 3, 1, 0, 2};
+                int[] col = {0, 3, 1, 2, 2};
+                float[] data = {4, 5, -7, 9, 2};
+                    /*
+                matrix([[ 4,  0,  9,  0],
+                        [ 0, -7,  0,  0],
+                        [ 0,  0,  2,  0],
+                        [ 0,  0,  0,  5]])
+                     */
+                mat2 = CSCSparseMatrix.sparse(4, 4, row, col, data);
+            }
+            AbstractCSCSparseMatrix mat3 = mat2.prune(4f);
+            float[] expected = to_float(new double[]{0, 0.0, 0.0, 0.0, 0.0, -7.0, 0.0, 0.0, 9.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0});
+            assertArrayEquals(expected, mat3.toArray(), 1e-7f);
+            assertEquals(3, mat3.nnz());
 
         }
 

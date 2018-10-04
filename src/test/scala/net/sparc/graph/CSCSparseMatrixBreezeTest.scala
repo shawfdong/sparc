@@ -3,8 +3,8 @@ package net.sparc.graph
 import util.Random
 import java.util
 
-import breeze.linalg.{*, Axis, DenseVector, Transpose, sum, DenseMatrix => BDM}
-import breeze.numerics.pow
+import breeze.linalg.{*, Axis, DenseVector, Transpose, max, min, sum, DenseMatrix => BDM}
+import breeze.numerics.{abs, pow}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers._
 
@@ -25,7 +25,7 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
     val bmatrix = BDM.rand[Double](m, n);
     for (i <- 1 until m)
       for (j <- 1 until n) {
-        if (bmatrix(i, j) > t) {
+        if (Random.nextInt(N) / N.toDouble > t) {
           bmatrix(i, j) = 0.0
         } else {
           bmatrix(i, j) = bmatrix(i, j).toFloat
@@ -57,6 +57,31 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
     for (i <- 0 until arr1.size) arr1(i) should be(arr2(i) +- eps)
   }
 
+  test("test prune") {
+    (0 to TEST_ROUND).foreach { _ =>
+      val (bmat1: BDM[Double], smat1: CSCSparseMatrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      val maxv = max(bmat1)
+      val minv = min(bmat1)
+      val r = {
+        val a = Random.nextInt(200) / 200.0
+        minv + (maxv - minv) * a
+      }
+
+      bmat1(abs(bmat1) <:= r) := 0.0;
+
+      if (false) {
+        println(dim, r)
+        println(util.Arrays.toString(bmat1.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat1.toArray))
+
+      }
+
+
+      check_array_equal(smat1.prune(r.toFloat), bmat1, eps = 1e-5f)
+    }
+  }
+
   test("test matrix mult") {
     (0 to TEST_ROUND).foreach { _ =>
       val (bmat1: BDM[Double], smat1: CSCSparseMatrix) = createRandMatrix();
@@ -69,7 +94,7 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
         println(util.Arrays.toString(bmat2.toArray.map(_.toFloat)))
         println(util.Arrays.toString(smat2.toArray))
       }
-      check_array_equal(smat1.mmult(smat2), bmat1 * bmat2, eps=1e-2f)
+      check_array_equal(smat1.mmult(smat2), bmat1 * bmat2, eps = 1e-2f)
     }
   }
 
