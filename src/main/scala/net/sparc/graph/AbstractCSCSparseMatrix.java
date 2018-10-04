@@ -38,6 +38,14 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         this.values = values;
     }
 
+    public int getNumRows() {
+        return numRows;
+    }
+
+    public int getNumCols() {
+        return numCols;
+    }
+
     public int nnz() {
         return values.length;
     }
@@ -87,16 +95,16 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         Integer[] idx = tuple.x;
         J = ArrayUtils.reindex(J, idx);
         S = ArrayUtils.reindex(S, idx);
-        return makeSparseMatrix(J, sorted_I, S);
+        return makeSparseMatrix(numCols, numRows, J, sorted_I, S);
     }
 
 
-    public AbstractCSCSparseMatrix makeSparseMatrix(int[] row, int[] col, float[] val) throws Exception {
+    public AbstractCSCSparseMatrix makeSparseMatrix(int m, int n, int[] row, int[] col, float[] val) throws Exception {
         ArrayList<COOItem> lst = new ArrayList<COOItem>();
         for (int i = 0; i < row.length; i++) {
             lst.add(new COOItem(row[i], col[i], val[i]));
         }
-        return internal_fromCOOItemArray(numRows, numCols, lst);
+        return internal_fromCOOItemArray(m, n, lst);
     }
 
 
@@ -142,7 +150,7 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
      * matrix multiplication
      */
     public AbstractCSCSparseMatrix mmult(AbstractCSCSparseMatrix other) throws Exception {
-        if (this.numRows != other.numCols) {
+        if (this.numCols != other.numRows) {
             throw new Exception("Dimensions do not fit");
         }
 
@@ -215,9 +223,9 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
             if (item2.col < item1.col) {
                 item2 = null;
-            } else if (item2.col == item1.col && item2.row < item2.row) {
+            } else if (item2.col == item1.col && item2.row < item1.row) {
                 item2 = null;
-            } else if (item2.col == item1.col && item2.row == item2.row) {
+            } else if (item2.col == item1.col && item2.row == item1.row) {
                 lst.add(new COOItem(item1.row, item1.col, item1.v * item2.v));
                 item2 = null;
                 item1 = null;
@@ -247,7 +255,6 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
                 if (itor1.hasNext()) {
                     item1 = itor1.next();
                 } else {
-                    break;
                 }
             }
 
@@ -256,26 +263,38 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
                 if (itor2.hasNext()) {
                     item2 = itor2.next();
                 } else {
-                    break;
                 }
             }
 
-            if (item2.col < item1.col) {
+            if (item1 == null && item2 == null) {
+                break;
+            }
+
+            //System.out.println("DEBUG: " + item1 + "\t" + item2);
+            if (item1 == null && item2 != null) {
                 lst.add(item2);
                 item2 = null;
-            } else if (item2.col == item1.col && item2.row < item2.row) {
-                lst.add(item2);
-                item2 = null;
-            } else if (item2.col == item1.col && item2.row == item2.row) {
-                float v = item1.v + item2.v;
-                if (Math.abs(v) > 1e-8) {
-                    lst.add(new COOItem(item1.row, item1.col, v));
-                }
-                item2 = null;
-                item1 = null;
-            } else {
+            } else if (item2 == null && item1 != null) {
                 lst.add(item1);
                 item1 = null;
+            } else {
+                if (item2.col < item1.col) {
+                    lst.add(item2);
+                    item2 = null;
+                } else if (item2.col == item1.col && item2.row < item1.row) {
+                    lst.add(item2);
+                    item2 = null;
+                } else if (item2.col == item1.col && item2.row == item1.row) {
+                    float v = item1.v + item2.v;
+                    if (Math.abs(v) > 1e-8) {
+                        lst.add(new COOItem(item1.row, item1.col, v));
+                    }
+                    item2 = null;
+                    item1 = null;
+                } else {
+                    lst.add(item1);
+                    item1 = null;
+                }
             }
         }
 
@@ -376,9 +395,9 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
             if (item2.col < item1.col) {
                 item2 = null;
-            } else if (item2.col == item1.col && item2.row < item2.row) {
+            } else if (item2.col == item1.col && item2.row < item1.row) {
                 item2 = null;
-            } else if (item2.col == item1.col && item2.row == item2.row) {
+            } else if (item2.col == item1.col && item2.row == item1.row) {
                 lst.add(new COOItem(item1.row, item1.col, item1.v / item2.v));
                 item2 = null;
                 item1 = null;
@@ -413,6 +432,7 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
         return arr;
     }
+
     public AbstractCSCSparseMatrix normalize_by_col() throws Exception {
         return this.divide(this.sum_by_col());
     }

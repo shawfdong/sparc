@@ -10,6 +10,13 @@ import static org.junit.Assert.*;
 
 public class CSCSparseMatrixTest {
 
+    float[] to_float(double[] v) {
+        float[] r = new float[v.length];
+        for (int i = 0; i < v.length; i++) {
+            r[i] = (float) v[i];
+        }
+        return r;
+    }
 
     @Test
     public void transpose() throws Exception {
@@ -143,6 +150,24 @@ public class CSCSparseMatrixTest {
             assertTrue(mat == mat2);
             assertArrayEquals(expected_arr, mat.toArray(), 1e-9f);
         }
+
+        if (true) { //normal sparse matrix
+            int[] row = {0, 3, 1, 0};
+            int[] col = {0, 3, 1, 2};
+            float[] data = {4, 5, 7, 9};
+            float[] expected_arr = new float[]{1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1};
+                    /*
+            matrix([[4, 0, 9, 0],
+                    [0, 7, 0, 0],
+                    [0, 0, 0, 0],
+                    [0, 0, 0, 5]])
+                     */
+            CSCSparseMatrix mat = CSCSparseMatrix.sparse(4, 4, row, col, data);
+            System.out.println(mat.toString());
+            AbstractCSCSparseMatrix mat2 = mat.pow(0);
+            assertTrue(mat == mat2);
+            assertArrayEquals(expected_arr, mat.toArray(), 1e-9f);
+        }
     }
 
     @Test
@@ -226,6 +251,39 @@ public class CSCSparseMatrixTest {
 
             assertEquals(4, mat3.nnz());
 
+        }
+
+        if (true) {
+            CSCSparseMatrix mat1 = CSCSparseMatrix.from_array(4, 2, new float[]{0.79074895f, 0.03295443f, 0.101395786f, 0.41718674f, 0.6596278f, 0.0f, 0.0f, 0.0f});
+            CSCSparseMatrix mat2 = CSCSparseMatrix.from_array(4, 2, to_float(new double[]{0.7317541, 0.72773397, 0.33861917, 0.15735602, 0.12042163, 0.48110846, 0.46385705, 0.4635681}));
+
+            AbstractCSCSparseMatrix mat3 = mat1.plus(mat2);
+//            System.out.println(mat1);
+//            System.out.println(mat2);
+//            System.out.println(mat3);
+            assertArrayEquals(to_float(new double[]{1.5225031, 0.7606884, 0.44001493, 0.57454276, 0.78004944, 0.48110846, 0.46385705, 0.4635681}), mat3.toArray(), 1e-6f);
+            AbstractCSCSparseMatrix mat4 = mat2.plus(mat1);
+            assertArrayEquals(to_float(new double[]{1.5225031, 0.7606884, 0.44001493, 0.57454276, 0.78004944, 0.48110846, 0.46385705, 0.4635681}), mat4.toArray(), 1e-6f);
+
+        }
+
+        if (true) {
+            System.out.println("test 3");
+
+            float[] arr1 = to_float(new double[]{0.15983225, 0.25313875, 0.2003962, 0.9498814, 0.8113833, 0.0, 0.091872714, 0.091675825});
+            float[] arr2 = to_float(new double[]{0.52453613, 0.51148975, 0.7013601, 0.6965029, 0.36024085, 0.6188023, 0.4419955, 0.717337});
+            float[] arr3 = to_float(new double[]{0.6843684, 0.7646285, 0.9017563, 1.6463842, 1.1716242, 0.6188023, 0.5338682, 0.80901283});
+
+            CSCSparseMatrix mat1 = CSCSparseMatrix.from_array(4, 2, arr1);
+            CSCSparseMatrix mat2 = CSCSparseMatrix.from_array(4, 2, arr2);
+
+            AbstractCSCSparseMatrix mat3 = mat1.plus(mat2);
+            System.out.println(mat1);
+            System.out.println(mat2);
+            System.out.println(mat3);
+            assertArrayEquals(arr3, mat3.toArray(), 1e-6f);
+            AbstractCSCSparseMatrix mat4 = mat2.plus(mat1);
+            assertArrayEquals(arr3, mat4.toArray(), 1e-6f);
         }
 
     }

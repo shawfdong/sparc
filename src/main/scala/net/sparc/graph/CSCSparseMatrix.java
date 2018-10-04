@@ -20,6 +20,22 @@ public class CSCSparseMatrix extends AbstractCSCSparseMatrix {
         return fromCOOItemArray(numRows, numCols, lst);
     }
 
+    public static CSCSparseMatrix from_array(int numRows, int numCols, float[] data) throws Exception {
+        if (numCols * numRows != data.length) {
+            throw new Exception(("dimension is not right"));
+        }
+        ArrayList<COOItem> lst = new ArrayList<COOItem>();
+        int cnt = 0;
+        for (int i = 0; i < numCols; i++) {
+            for (int j = 0; j < numRows; j++) {
+                if (Math.abs(data[cnt]) > 1e-8) {
+                    lst.add(new COOItem(j,i, data[cnt]));
+                }
+                cnt++;
+            }
+        }
+        return fromCOOItemArray(numRows, numCols, lst);
+    }
 
     protected static CSCSparseMatrix fromCOOItemArray(int numRows, int numCols, ArrayList<COOItem> lst) {
         lst.sort(new Comparator<COOItem>() {
