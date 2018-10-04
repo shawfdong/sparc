@@ -83,7 +83,7 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
     }
 
-    public AbstractCSCSparseMatrix transpose() throws Exception {
+    public AbstractCSCSparseMatrix transpose() {
 
         ArrayUtils.Triplet<int[], int[], float[]> triplet = this.find();
         int[] I = triplet.x;
@@ -466,8 +466,6 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
     }
 
     public AbstractCSCSparseMatrix sum_by_col() {
-        Iterator<COOItem> itor1 = this.iterator();
-
         HashMap<Integer, Float> dict = new HashMap<>();
 
         Iterator<COOItem> itor;

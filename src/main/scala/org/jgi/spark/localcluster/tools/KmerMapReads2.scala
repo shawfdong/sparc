@@ -138,7 +138,7 @@ object KmerMapReads2 extends App with LazyLogging {
         sc.textFile(file, minPartitions = n_partition)
       else
         sc.textFile(file)
-      if (sample_fraction > 0) textRDD = textRDD.sample(false, sample_fraction, Random.nextLong())
+      if (sample_fraction > 0) textRDD = textRDD.sample(withReplacement = false, sample_fraction, Random.nextLong())
       if (format.equals("seq")) {
 
         textRDD.map {

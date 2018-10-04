@@ -22,7 +22,7 @@ class LPA(val checkpoint_dir: String, val has_weight: Boolean) extends LazyLoggi
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
 
     var (_, df) = checkpoint.checkpoint(rawdf.withColumn("cid", column("src"))
-      .withColumn("changed", lit(true)), true)
+      .withColumn("changed", lit(true)), rm_prev_ckpt = true)
 
     logger.info("dataframe schema:")
     df.printSchema()

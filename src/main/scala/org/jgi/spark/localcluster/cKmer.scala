@@ -21,7 +21,7 @@ object cKmer {
 
   def generate_edges(reads: Array[Int], max_degree: Int) = {
     val v = new net.sparc.intVector(reads.length)
-    (0 until reads.length).foreach(i=>v.set(i,reads(i)))
+    reads.indices.foreach(i=>v.set(i,reads(i)))
     val results = sparc.generate_edges(v, max_degree);
     (0 until results.size().toInt).map{
       i=>

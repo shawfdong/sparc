@@ -76,7 +76,7 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
   def normalize_by_col() = {
     val colsum = col_sum()
 
-    val df = matrix.join(col_sum, Seq("colBlock")).withColumn("value", udf_divide($"value", $"colsum"))
+    val df = matrix.join(colsum, Seq("colBlock")).withColumn("value", udf_divide($"value", $"colsum"))
     matrix = df.drop("colsum")
     this
   }

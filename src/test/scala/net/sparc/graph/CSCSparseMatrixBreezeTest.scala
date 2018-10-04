@@ -47,7 +47,7 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
       (bmat.toArray.map(_.toFloat))
     }
     if (false) {
-      println(util.Arrays.toString(arr1.toArray))
+      println(util.Arrays.toString(arr1))
       println(util.Arrays.toString(arr2.toArray))
     }
     //    implicit val custom = TolerantNumerics.tolerantFloatEquality(1e-6f)
@@ -214,7 +214,7 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
         println(util.Arrays.toString(bmat2.toArray.map(_.toFloat)))
         println(util.Arrays.toString(smat2.toArray))
       }
-      check_array_equal(smat1.divide(smat2), bmat1 /:/ bmat2, true, 1e-2f)
+      check_array_equal(smat1.divide(smat2), bmat1 /:/ bmat2, filter_nan = true, 1e-2f)
     }
   }
 

@@ -38,7 +38,7 @@ class CKmerSpec extends FlatSpec with Matchers {
         dna.to_bases(k) should equal ( s)
     }
     val seq ="AGGGCAACAGAAGATGATAACAGAAAGGCATTTTCCATGCCTATATTCGGTCGTTTTACCCAGAGAGCCCAGCAGACACTGATGCTGGCCCAGCGGATCGCNTCTGTCCCAGCTTATGGGATTCCAGCACGCTGTTTTCCAGCGTTTTCTTTGCCCTGGGGCTCAGCTCGATCCGGTTTCCTCTGGCCTCTTCCGGATCACCG"
-    val kmers2 = cKmer.generate_kmer(seq, k, false).map(_.to_bases(k)).toSet
+    val kmers2 = cKmer.generate_kmer(seq, k, is_canonical = false).map(_.to_bases(k)).toSet
     println(s"length: ${kmers1.size} vs ${kmers2.size}")
     println("diff1",kmers1.diff(kmers2).size)
 

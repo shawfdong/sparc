@@ -17,13 +17,12 @@ class AffinityPropagation(val checkpoint_dir: String, val damping: Float, val co
 
   //return node,cluster pair
   def run(rawdf: Dataset[Row], sqlContext: SQLContext, max_iteration: Int): (RDD[(Int, Int)], Checkpoint) = {
-    val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
 
     var (_, df) = checkpoint.checkpoint(rawdf.withColumn("availability", lit(0f))
       .withColumn("responsibility", lit(0f))
-      .withColumn("cid", col("src")), true)
+      .withColumn("cid", col("src")), rm_prev_ckpt = true)
     logger.info("dataframe schema:")
     df.printSchema()
     df.show(10)
@@ -70,7 +69,7 @@ class AffinityPropagation(val checkpoint_dir: String, val damping: Float, val co
       val table: Seq[(Int, Int, Float, Float)] = grouped._2.toList
       val s_k: Map[Int, Float] = table.map { x =>
         (x._2, x._3)
-      }.groupBy(x => x._1).map(x => (x._1, average(x._2.map(_._2)).toFloat)).toMap
+      }.groupBy(x => x._1).map(x => (x._1, average(x._2.map(_._2)).toFloat))
       val sorted_list = table.map { x =>
         (x._1, x._2, x._3 + x._4) //src, dest, similarity + availability
       }.sortBy(_._3)(Ordering[Float].reverse)
@@ -79,7 +78,7 @@ class AffinityPropagation(val checkpoint_dir: String, val damping: Float, val co
           (x._1, x._2, s_k(x._2))
         })
       } else {
-        val largest_sa = sorted_list(0)._3
+        val largest_sa = sorted_list.head._3
         val largest_k = sorted_list(0)._2
         val second_largest_sa = sorted_list(1)._3
 
