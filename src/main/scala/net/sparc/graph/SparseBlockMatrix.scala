@@ -10,47 +10,28 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 
-case class CSCMatrixWraper(numRows: Int, numCols: Int, colPtrs: Array[Int], rowIndices: Array[Int], values: Array[Float]) {
-  def plus(other: CSCMatrixWraper) = {
-    val a = SparseBlockMatrix.case_to_csc(this).plus(SparseBlockMatrix.case_to_csc(other))
-    SparseBlockMatrix.csc_to_case(a.asInstanceOf[CSCSparseMatrix])
-  }
-
-  def mmult(other: CSCMatrixWraper) = {
-    val a = SparseBlockMatrix.case_to_csc(this).mmult(SparseBlockMatrix.case_to_csc(other))
-    SparseBlockMatrix.csc_to_case(a.asInstanceOf[CSCSparseMatrix])
-  }
-
-  def divide(other: CSCMatrixWraper) = {
-    val a = SparseBlockMatrix.case_to_csc(this).divide(SparseBlockMatrix.case_to_csc(other))
-    SparseBlockMatrix.csc_to_case(a.asInstanceOf[CSCSparseMatrix])
-  }
-
-  def pow(r: Double) = {
-    val a = SparseBlockMatrix.case_to_csc(this).pow(r)
-    SparseBlockMatrix.csc_to_case(a.asInstanceOf[CSCSparseMatrix])
-  }
-
-  def transpose() = {
-    val a = SparseBlockMatrix.case_to_csc(this).transpose()
-    SparseBlockMatrix.csc_to_case(a.asInstanceOf[CSCSparseMatrix])
-  }
-}
-
 class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n_col_block: Int,
                         val max_row: Int, val max_col: Int, val sparkSession: SparkSession, val sparse: String = "CSC")
   extends Serializable {
 
 
-  def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
+  val helper: SparseMatrixHelper = {
+    val matrix =
+      if (sparse.toUpperCase == "CSC") {
+        new CSCSparseMatrixHelper
+      } else if (sparse.toUpperCase == "CSC") {
+        new DCSCSparseMatrixHelper
+      } else {
+        throw new Exception("Unknown " + sparse);
+      }
+    matrix
+  }
 
-    val matrix = if (sparse.toUpperCase == "CSC") {
-      val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]
-      CSCSparseMatrix.fromCOOItemArray(bin_row, bin_col, lst.asJava);
-    } else {
-      throw new Exception("Unknown " + sparse);
-    }
-    SparseBlockMatrix.csc_to_case(matrix);
+  def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
+    val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]
+    val matrix = helper.fromCOOItemArray(bin_row, bin_col, lst.asJava)
+    helper.csc_to_case(matrix)
+
   }
 
 
@@ -90,6 +71,7 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     val df = rdd2.toDF("rowBlock", "colBlock", "value")
     df.printSchema()
     df.show(3)
+    throw new Exception("ASD")
     df
   }
 
@@ -97,41 +79,33 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     matrix.rdd.map { row =>
       (row: @unchecked) match {
         case Row(rowBlock: Int, colBlock: Int,
-        Row(numRows: Int, numCols: Int, colPtrs: mutable.WrappedArray[Int],
-        rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float])) =>
-          val value = CSCMatrixWraper(numRows, numCols, colPtrs.toArray, rowIndices.toArray, values.toArray)
+        subrow: Row)
+        =>
+          val value = helper.row_to_wrapper(subrow)
           (colBlock, value)
       }
     }.reduceByKey {
       (u, v) =>
-        u.plus(v)
+        helper.plus(u, v)
     }.toDF("colBlock", "colsum")
   }
 
 
-  def row_to_wrapper(row: Row): CSCMatrixWraper = {
-    (row: @unchecked) match {
-      case Row(numRows: Int, numCols: Int, colPtrs: mutable.WrappedArray[Int],
-      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float]) =>
-        CSCMatrixWraper(numRows, numCols, colPtrs.toArray, rowIndices.toArray, values.toArray)
-    }
-  }
-
   def udf_pow(r: Double) = udf((m: Row) => {
-    row_to_wrapper(m).pow(r)
+    helper.pow(m, r)
   })
 
   val udf_divide = udf((m1: Row, m2: Row) => {
 
-    row_to_wrapper(m1).divide(row_to_wrapper(m2))
+    helper.divide(m1, m2)
   })
 
   val udf_mmult = udf((m1: Row, m2: Row) => {
-    row_to_wrapper(m1).mmult(row_to_wrapper(m2))
+    helper.mmult(m1, m2)
   })
 
   val udf_transpose = udf((m: Row) => {
-    row_to_wrapper(m).transpose
+    helper.transpose(m)
   })
 
   def normalize_by_col() = {
@@ -181,24 +155,7 @@ object SparseBlockMatrix {
     new SparseBlockMatrix(rdd, n_row_block, n_col_block, max_row, max_col, sparkSession)
   }
 
-  val csc_struct_type = StructType(
-    List(
-      StructField("numRow", IntegerType, false),
-      StructField("numCols", IntegerType, false),
-      StructField("colPtrs", ArrayType(IntegerType, false), false),
-      StructField("rowIndices", ArrayType(IntegerType, false), false),
-      StructField("values", ArrayType(IntegerType, false), false)
 
-    )
-  )
-
-  def csc_to_case(mat: CSCSparseMatrix) = {
-    CSCMatrixWraper(mat.getNumRows, mat.getNumCols, mat.getColPtrs, mat.getRowIndices, mat.getValues)
-  }
-
-  def case_to_csc(mat: CSCMatrixWraper) = {
-    new CSCSparseMatrix(mat.numRows, mat.numCols, mat.colPtrs, mat.rowIndices, mat.values)
-  }
 }
 
 object SparseBlockMatrixEncoder {
