@@ -1,9 +1,10 @@
 package net.sparc.graph;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Vector;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
+import java.util.*;
 
 public class DCSCSparseMatrix extends AbstractCSCSparseMatrix {
     private int[] colPtrPtrs;
@@ -11,6 +12,9 @@ public class DCSCSparseMatrix extends AbstractCSCSparseMatrix {
     private transient int[] _colPtrs = null;
 
 
+    public DCSCSparseMatrix(){
+
+    }
     public DCSCSparseMatrix(int numRows, int numCols, int[] colPtrs, int[] rowIndices, float[] values) {
         super(numRows, numCols, rowIndices, values);
         this._colPtrs = colPtrs;
@@ -73,7 +77,7 @@ public class DCSCSparseMatrix extends AbstractCSCSparseMatrix {
         return fromCOOItemArray(numRows, numCols, lst);
     }
 
-    protected static DCSCSparseMatrix fromCOOItemArray(int numRows, int numCols, ArrayList<COOItem> lst) {
+    protected static DCSCSparseMatrix fromCOOItemArray(int numRows, int numCols, List<COOItem> lst) {
         lst.sort(new Comparator<COOItem>() {
             @Override
             public int compare(COOItem t0, COOItem t1) {

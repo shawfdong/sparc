@@ -4,7 +4,6 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{FloatType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 
 import scala.util.control.Breaks.{break, breakable}
@@ -20,7 +19,6 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
-
     var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, matrix_block_size, matrix_block_size, spark).normalize_by_col()
       .checkpointWith(checkpoint, rm_prev_ckpt = true)
 

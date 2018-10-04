@@ -4,12 +4,14 @@ import java.io.Serializable;
 import java.util.*;
 
 public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable {
+    protected int numRows;
+    protected int numCols;
+    protected int[] rowIndices;
+    protected float[] values;
 
+    public AbstractCSCSparseMatrix() {
 
-    private final int numRows;
-    private final int numCols;
-    private int[] rowIndices;
-    private float[] values;
+    }
 
 
     /**

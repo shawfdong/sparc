@@ -1,10 +1,20 @@
 package net.sparc.graph;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 
 public class CSCSparseMatrix extends AbstractCSCSparseMatrix {
-    private final int[] colPtrs;
+
+    private   int[] colPtrs;
+
+    public CSCSparseMatrix(){
+
+    }
 
     public CSCSparseMatrix(int numRows, int numCols, int[] colPtrs, int[] rowIndices, float[] values) {
         super(numRows, numCols, rowIndices, values);
@@ -37,7 +47,7 @@ public class CSCSparseMatrix extends AbstractCSCSparseMatrix {
         return fromCOOItemArray(numRows, numCols, lst);
     }
 
-    protected static CSCSparseMatrix fromCOOItemArray(int numRows, int numCols, ArrayList<COOItem> lst) {
+    protected static CSCSparseMatrix fromCOOItemArray(int numRows, int numCols, List<COOItem> lst) {
         lst.sort(new Comparator<COOItem>() {
             @Override
             public int compare(COOItem t0, COOItem t1) {
@@ -70,6 +80,7 @@ public class CSCSparseMatrix extends AbstractCSCSparseMatrix {
 
     }
 
+
     @Override
     protected AbstractCSCSparseMatrix internal_fromCOOItemArray(int numRows, int numCols, ArrayList<COOItem> lst) {
         return CSCSparseMatrix.fromCOOItemArray(numRows, numCols, lst);
@@ -79,4 +90,5 @@ public class CSCSparseMatrix extends AbstractCSCSparseMatrix {
     int[] getColPtrs() {
         return colPtrs;
     }
+
 }

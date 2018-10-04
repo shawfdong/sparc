@@ -4,7 +4,7 @@
 package org.jgi.spark.localcluster.tools
 
 import com.typesafe.scalalogging.LazyLogging
-import net.sparc.graph.{AffinityPropagation, MCL}
+import net.sparc.graph._
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, SparkSession}
@@ -18,7 +18,7 @@ object GraphMCL extends App with LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
                     max_iteration: Int = 10, inflation: Float = 1f, scaling: Float = 1f,
-                    n_output_blocks: Int = 180, weight: String = "none", matrix_block_size:Int =0,
+                    n_output_blocks: Int = 180, weight: String = "none", matrix_block_size: Int = 0,
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     n_partition: Int = 0)
 
@@ -42,7 +42,6 @@ object GraphMCL extends App with LazyLogging {
       opt[Int]('n', "n_partition").action((x, c) =>
         c.copy(n_partition = x))
         .text("paritions for the input")
-
 
 
       opt[Int]("max_iteration").action((x, c) =>
@@ -71,7 +70,7 @@ object GraphMCL extends App with LazyLogging {
       opt[Double]("inflation").action((x, c) =>
         c.copy(inflation = x.toFloat)).
         validate(x =>
-          if (x >0) success
+          if (x > 0) success
           else failure("inflation factor should >0"))
         .text("inflation factor")
 
@@ -117,7 +116,7 @@ object GraphMCL extends App with LazyLogging {
 
   def mcl(edgeTuples: RDD[(Int, Int, Float)], config: Config, sqlContext: SQLContext) = {
     val (cc, checkpoint) = MCL.run(edgeTuples, config.matrix_block_size, sqlContext, config.max_iteration,
-      config.inflation, config.scaling,   checkpoint_dir)
+      config.inflation, config.scaling, checkpoint_dir)
     val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
     (clusters, checkpoint)
   }
@@ -128,7 +127,7 @@ object GraphMCL extends App with LazyLogging {
   }
 
   protected def run_mcl(all_edges: RDD[Array[Int]], config: Config, spark: SparkSession,
-                       n_reads: Long) = {
+                        n_reads: Long) = {
     val sqlContext = spark.sqlContext
 
     val (tmp_clusters, checkpoint) = if (config.weight.toLowerCase == "none") {
@@ -227,7 +226,9 @@ object GraphMCL extends App with LazyLogging {
         require(config.min_shared_kmers <= config.max_shared_kmers)
 
         val conf = new SparkConf().setAppName(APPNAME)
-        conf.registerKryoClasses(Array(classOf[DNASeq]))
+
+        conf.registerKryoClasses(Array(classOf[DNASeq], classOf[AbstractCSCSparseMatrix],
+          classOf[CSCSparseMatrix], classOf[DCSCSparseMatrix]))
 
         val spark = SparkSession
           .builder().config(conf)
