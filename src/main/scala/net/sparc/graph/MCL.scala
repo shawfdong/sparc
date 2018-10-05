@@ -22,7 +22,7 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
-    var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, matrix_block_size, matrix_block_size, spark)
+    var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, bin_row = matrix_block_size, bin_col = matrix_block_size, spark)
       .normalize_by_col()
       .compact()
       .checkpointWith(checkpoint, rm_prev_ckpt = true)

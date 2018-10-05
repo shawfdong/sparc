@@ -3,7 +3,6 @@ package org.jgi.spark.localcluster.tools
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
 import net.sparc.graph.{AbstractCSCSparseMatrix, CSCSparseMatrix, DCSCSparseMatrix, SparseBlockMatrixEncoder}
 import org.apache.spark.SparkConf
-import org.jgi.spark.localcluster.DNASeq
 import org.scalatest.{FlatSpec, Matchers, _}
 import sext._
 
@@ -28,7 +27,7 @@ class GraphMCLSpec extends FlatSpec with Matchers with BeforeAndAfter with DataF
   "GraphMCL" should "work on the test seq files" in {
 
     val cfg = GraphMCL.parse_command_line(
-      "-i data/graph_gen_test.txt   -o tmp/graph_mcl.txt --max_iteration 10  --min_reads_per_cluster 0 --scaling 1 --matrix_block_size 4".split(" ")
+      "-i data/graph_gen_test.txt   -o tmp/graph_mcl.txt --max_iteration 10  --min_reads_per_cluster 0 --scaling 1 --matrix_block_size 20".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
     GraphMCL.run(cfg, spark)

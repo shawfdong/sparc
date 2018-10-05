@@ -5,6 +5,7 @@ import java.util
 import org.apache.spark.sql.Row
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 case class CSCMatrixWrapper(numRows: Int,
                             numCols: Int,
@@ -24,11 +25,24 @@ class CSCSparseMatrixHelper extends Serializable {
     }
   }
 
+  def makeString(row: Row) = {
+    row_to_csc(row).toString
+  }
+
+  def isempty(row: Row) = {
+    (row: @unchecked) match {
+      case Row(_: Int, _: Int,
+      _: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float],
+      _: mutable.WrappedArray[Int]) =>
+        values.length == 0
+    }
+  }
 
   def row_to_csc(row: Row): CSCSparseMatrix = {
     (row: @unchecked) match {
       case Row(numRows: Int, numCols: Int,
-      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float], colPtrs: mutable.WrappedArray[Int]) =>
+      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float],
+      colPtrs: mutable.WrappedArray[Int]) =>
         new CSCSparseMatrix(numRows, numCols, colPtrs.toArray, rowIndices.toArray, values.toArray)
     }
   }
@@ -40,6 +54,13 @@ class CSCSparseMatrixHelper extends Serializable {
 
   def case_to_csc(mat: CSCMatrixWrapper) = {
     new CSCSparseMatrix(mat.numRows, mat.numCols, mat.colPtrs, mat.rowIndices, mat.values)
+  }
+
+  def argmax_along_row(m: Row):Map[Integer,(Integer,Float)] ={
+    row_to_csc(m).argmax_along_row.asScala.map{
+      u=>
+        (u._1,(u._2.x,u._2.y.toFloat))
+    }.toMap
   }
 
   def transpose(m: Row): CSCMatrixWrapper = {

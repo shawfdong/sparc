@@ -10,8 +10,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
-class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n_col_block: Int,
-                        val max_row: Int, val max_col: Int, val sparkSession: SparkSession)
+class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_col: Int,
+                        val num_row: Int, val num_col: Int, val sparkSession: SparkSession)
   extends Serializable with LazyLogging {
 
   import sparkSession.implicits._
@@ -19,10 +19,10 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
   val helper = new DCSCSparseMatrixHelper
 
 
-  val bin_row = math.ceil(1.0 * max_row / n_row_block).toInt
-  val bin_col = math.ceil(1.0 * max_col / n_col_block).toInt
+  val n_row_block = math.ceil(1.0 * num_row / bin_row).toInt
+  val n_col_block = math.ceil(1.0 * num_row / bin_col).toInt
 
-  logger.info(s"#row_block=${n_row_block}, #col_bock=${n_col_block}, #row=${max_row}, #col=${max_col}, row_bin_size=${bin_row}, col_bin_size=${bin_col}")
+  logger.info(s"#row_block=${n_row_block}, #col_bock=${n_col_block}, #row=${num_row}, #col=${num_col}, row_bin_size=${bin_row}, col_bin_size=${bin_col}")
 
   require(bin_row > 0)
   require(bin_col > 0)
@@ -192,11 +192,11 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
 object SparseBlockMatrix {
 
 
-  def from_rdd(rdd: RDD[(Int, Int, Float)], n_row_block: Int, n_col_block: Int, sparkSession: SparkSession): SparseBlockMatrix = {
-    require(n_row_block > 0 && n_col_block > 0)
+  def from_rdd(rdd: RDD[(Int, Int, Float)], bin_row: Int, bin_col: Int, sparkSession: SparkSession): SparseBlockMatrix = {
+    require(bin_row > 0 && bin_col > 0)
     val max_row = rdd.map(_._1).max()
     val max_col = rdd.map(_._2).max()
-    new SparseBlockMatrix(rdd, n_row_block, n_col_block, max_row, max_col, sparkSession)
+    new SparseBlockMatrix(rdd, bin_row = bin_row, bin_col = bin_col, num_row = max_row, num_col = max_col, sparkSession)
   }
 
 
