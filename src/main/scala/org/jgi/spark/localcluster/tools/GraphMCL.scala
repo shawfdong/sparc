@@ -17,7 +17,7 @@ object GraphMCL extends App with LazyLogging {
 
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
-                    max_iteration: Int = 10, inflation: Float = 1f, scaling: Float = 1f,
+                    max_iteration: Int = 10, inflation: Float = 2f, scaling: Float = 1f,
                     n_output_blocks: Int = 180, weight: String = "none", matrix_block_size: Int = 0,
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     n_partition: Int = 0)

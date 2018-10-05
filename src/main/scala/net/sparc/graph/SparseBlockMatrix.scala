@@ -3,10 +3,8 @@ package net.sparc.graph
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 
@@ -15,7 +13,7 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
   extends Serializable {
 
 
-  val helper = new CSCSparseMatrixHelper
+  val helper = new DCSCSparseMatrixHelper
 
   def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
     val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]
@@ -61,7 +59,6 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     val df = rdd2.toDF("rowBlock", "colBlock", "value")
     df.printSchema()
     df.show(3)
-    throw new Exception("ASD")
     df
   }
 

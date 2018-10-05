@@ -12,7 +12,7 @@ import sext._
   */
 class GraphMCLSpec extends FlatSpec with Matchers with BeforeAndAfter with DataFrameSuiteBase {
   override def conf: SparkConf = {
-    val conf = super.conf
+    val conf = super.conf.set("spark.ui.enabled", "true")
     conf.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
     //conf.set("spark.kryo.registrationRequired", "true")
     conf.registerKryoClasses(Array(classOf[AbstractCSCSparseMatrix],

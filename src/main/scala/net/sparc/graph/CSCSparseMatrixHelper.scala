@@ -18,8 +18,8 @@ class CSCSparseMatrixHelper extends Serializable {
 
   def row_to_wrapper(row: Row): CSCMatrixWrapper = {
     (row: @unchecked) match {
-      case Row(numRows: Int, numCols: Int, colPtrs: mutable.WrappedArray[Int],
-      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float]) =>
+      case Row(numRows: Int, numCols: Int,
+      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float], colPtrs: mutable.WrappedArray[Int]) =>
         CSCMatrixWrapper(numRows, numCols, rowIndices.toArray, values.toArray, colPtrs.toArray)
     }
   }
@@ -27,8 +27,8 @@ class CSCSparseMatrixHelper extends Serializable {
 
   def row_to_csc(row: Row): CSCSparseMatrix = {
     (row: @unchecked) match {
-      case Row(numRows: Int, numCols: Int, colPtrs: mutable.WrappedArray[Int],
-      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float]) =>
+      case Row(numRows: Int, numCols: Int,
+      rowIndices: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float], colPtrs: mutable.WrappedArray[Int]) =>
         new CSCSparseMatrix(numRows, numCols, colPtrs.toArray, rowIndices.toArray, values.toArray)
     }
   }

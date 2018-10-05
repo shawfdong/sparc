@@ -28,10 +28,15 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     breakable {
 
       for (i <- 1 to max_iteration) {
+        logger.info(s"start running iteration ${i}")
+
         sparseBlockMatrix = run_iteration(sparseBlockMatrix, i).checkpointWith(checkpoint, rm_prev_ckpt = true)
         if (convergence_count >= 1) {
           logger.info(s"Stop at iteration ${i}")
           break
+        }
+        if (i > 3) {
+          throw new Exception("ADDF");
         }
       }
     }
@@ -60,8 +65,6 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
 
   def run_iteration(sparseBlockMatrix: SparseBlockMatrix, iter: Int) = {
     val df = sparseBlockMatrix.getMatrix
-    import df.sparkSession.implicits._
-
     val matrix2 = sparseBlockMatrix.mmult(sparseBlockMatrix.transpose())
     val matrix3 = matrix2.pow(2).normalize_by_col()
     matrix3
