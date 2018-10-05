@@ -19,7 +19,9 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
-    var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, matrix_block_size, matrix_block_size, spark).normalize_by_col()
+    var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, matrix_block_size, matrix_block_size, spark)
+      .normalize_by_col()
+      .compact()
       .checkpointWith(checkpoint, rm_prev_ckpt = true)
 
 
@@ -30,7 +32,9 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
       for (i <- 1 to max_iteration) {
         logger.info(s"start running iteration ${i}")
 
-        sparseBlockMatrix = run_iteration(sparseBlockMatrix, i).checkpointWith(checkpoint, rm_prev_ckpt = true)
+        sparseBlockMatrix = run_iteration(sparseBlockMatrix, i)
+          .checkpointWith(checkpoint, rm_prev_ckpt = true)
+        sparseBlockMatrix.show()
         if (convergence_count >= 1) {
           logger.info(s"Stop at iteration ${i}")
           break
@@ -64,10 +68,9 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
   }
 
   def run_iteration(sparseBlockMatrix: SparseBlockMatrix, iter: Int) = {
-    val df = sparseBlockMatrix.getMatrix
-    val matrix2 = sparseBlockMatrix.mmult(sparseBlockMatrix.transpose())
+    val matrix2 = sparseBlockMatrix.mmult(sparseBlockMatrix)
     val matrix3 = matrix2.pow(2).normalize_by_col()
-    matrix3
+    matrix3.compact
   }
 
 }

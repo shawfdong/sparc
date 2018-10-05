@@ -15,6 +15,8 @@ case class DCSCMatrixWrapper(numRows: Int,
 
 
 class DCSCSparseMatrixHelper extends Serializable {
+
+
   def row_to_wrapper(row: Row): DCSCMatrixWrapper = {
     (row: @unchecked) match {
       case Row(numRows: Int, numCols: Int,
@@ -34,6 +36,18 @@ class DCSCSparseMatrixHelper extends Serializable {
     }
   }
 
+  def makeString(row: Row) = {
+    row_to_csc(row).toString
+  }
+
+  def isempty(row: Row) = {
+    (row: @unchecked) match {
+      case Row(_: Int, _: Int,
+      _: mutable.WrappedArray[Int], values: mutable.WrappedArray[Float],
+      _: mutable.WrappedArray[Int], _: mutable.WrappedArray[Int]) =>
+        values.length == 0
+    }
+  }
 
   def csc_to_case(mat0: AbstractCSCSparseMatrix) = {
     val mat = mat0.asInstanceOf[DCSCSparseMatrix]

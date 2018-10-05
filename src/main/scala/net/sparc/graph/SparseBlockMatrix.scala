@@ -1,6 +1,7 @@
 package net.sparc.graph
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
 
@@ -62,6 +63,16 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     df
   }
 
+  def show(n: Int = 5): Unit = {
+    matrix.take(n).map {
+      row =>
+        val colBlock = row.getInt(0)
+        val rowBlock = row.getInt(1)
+        val subrow = row.getAs[Row](2)
+        "bcol=" + colBlock + " rcol=" + rowBlock + " " + helper.makeString(subrow)
+    }.foreach(println)
+  }
+
   def col_sum() = {
     matrix.rdd.map { row =>
       (row: @unchecked) match {
@@ -94,6 +105,15 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
   val udf_transpose = udf((m: Row) => {
     helper.transpose(m)
   })
+
+  val udf_is_emtpy: UserDefinedFunction = udf((m: Row) => {
+    !helper.isempty(m)
+  })
+
+  def compact() = {
+    matrix = matrix.filter(udf_is_emtpy($"value"))
+    this
+  }
 
   def normalize_by_col() = {
     val colsum = col_sum()

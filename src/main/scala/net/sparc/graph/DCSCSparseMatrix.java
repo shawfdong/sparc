@@ -148,9 +148,8 @@ public class DCSCSparseMatrix extends AbstractCSCSparseMatrix {
         return "AbstractCSCSparseMatrix{" +
                 "numRows=" + getNumRows() +
                 ", numCols=" + getNumCols() +
-                "colPtrPtrs=" + Arrays.toString(colPtrPtrs) +
+                ", colPtrPtrs=" + Arrays.toString(colPtrPtrs) +
                 ", colPtrRepetition=" + Arrays.toString(colPtrRepetition) +
-                ", colPtrs=" + Arrays.toString(getColPtrs()) +
                 ", rowIndices=" + Arrays.toString(getRowIndices()) +
                 ", values=" + Arrays.toString(getValues()) +
                 '}';
