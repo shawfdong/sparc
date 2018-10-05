@@ -28,18 +28,17 @@ class GraphMCLSpec extends FlatSpec with Matchers with BeforeAndAfter with DataF
   "GraphMCL" should "work on the test seq files" in {
 
     val cfg = GraphMCL.parse_command_line(
-      "--wait 10000 -i data/graph_gen_test.txt   -o tmp/graph_ap.txt --max_iteration 10  --min_reads_per_cluster 0 --scaling 1 --matrix_block_size 4".split(" ")
+      "-i data/graph_gen_test.txt   -o tmp/graph_mcl.txt --max_iteration 10  --min_reads_per_cluster 0 --scaling 1 --matrix_block_size 4".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
-    import SparseBlockMatrixEncoder._
     GraphMCL.run(cfg, spark)
-    //Thread.sleep(1000 * 10000)
+//    Thread.sleep(1000 * 10000)
   }
 
   "GraphMCL" should "work with weight" in {
 
     val cfg = GraphMCL.parse_command_line(
-      "-i data/graph_gen_test.txt   -o tmp/graph_ap_weightedge.txt --max_iteration 10  --min_reads_per_cluster 0 --weight edge  --scaling 0.5 ".split(" ")
+      "-i data/graph_gen_test.txt   -o tmp/graph_mcl_weightedge.txt --max_iteration 10  --min_reads_per_cluster 0 --weight edge  --scaling 0.5 ".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 

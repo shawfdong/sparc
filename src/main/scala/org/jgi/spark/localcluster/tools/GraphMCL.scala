@@ -18,6 +18,7 @@ object GraphMCL extends App with LazyLogging {
 
   case class Config(edge_file: String = "", output: String = "", min_shared_kmers: Int = 2,
                     max_iteration: Int = 10, inflation: Float = 2f, scaling: Float = 1f,
+                    convergence_iter: Int = 3,
                     n_output_blocks: Int = 180, weight: String = "none", matrix_block_size: Int = 0,
                     min_reads_per_cluster: Int = 2, max_shared_kmers: Int = 20000, sleep: Int = 0,
                     n_partition: Int = 0)
@@ -87,6 +88,9 @@ object GraphMCL extends App with LazyLogging {
           if (x >= 1) success
           else failure("n_output_blocks should be greater than 0"))
         .text("output block number")
+      opt[Int]("convergence_iter").action((x, c) =>
+        c.copy(convergence_iter = x))
+        .text("convergence_iter of the alg")
 
       opt[Int]("min_shared_kmers").action((x, c) =>
         c.copy(min_shared_kmers = x)).
@@ -116,7 +120,7 @@ object GraphMCL extends App with LazyLogging {
 
   def mcl(edgeTuples: RDD[(Int, Int, Float)], config: Config, sqlContext: SQLContext) = {
     val (cc, checkpoint) = MCL.run(edgeTuples, config.matrix_block_size, sqlContext, config.max_iteration,
-      config.inflation, config.scaling, checkpoint_dir)
+      config.inflation, config.convergence_iter, config.scaling, checkpoint_dir)
     val clusters = cc.map(x => (x._1.toLong, x._2.toLong))
     (clusters, checkpoint)
   }

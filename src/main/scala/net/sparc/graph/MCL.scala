@@ -6,7 +6,9 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 
+import scala.util.Try
 import scala.util.control.Breaks.{break, breakable}
+import scala.collection.JavaConverters._
 
 class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging {
 
@@ -15,7 +17,8 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
   private var convergence_count: Int = 0
 
   //return node,cluster pair
-  def run(rdd: RDD[(Int, Int, Float)], matrix_block_size: Int, sqlContext: SQLContext, max_iteration: Int): (RDD[(Int, Int)], Checkpoint) = {
+  def run(rdd: RDD[(Int, Int, Float)], matrix_block_size: Int, sqlContext: SQLContext, max_iteration: Int,
+          convergence_iter: Int): (RDD[(Int, Int)], Checkpoint) = {
     val spark = sqlContext.sparkSession
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
@@ -24,53 +27,61 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
       .compact()
       .checkpointWith(checkpoint, rm_prev_ckpt = true)
 
-
     sparseBlockMatrix.getMatrix.printSchema()
     sparseBlockMatrix.getMatrix.show(10)
+    var clusterdf: DataFrame = null
     breakable {
 
       for (i <- 1 to max_iteration) {
         logger.info(s"start running iteration ${i}")
 
-        sparseBlockMatrix = run_iteration(sparseBlockMatrix, i)
-          .checkpointWith(checkpoint, rm_prev_ckpt = true)
+        val ret = run_iteration(sparseBlockMatrix, clusterdf, i)
+        sparseBlockMatrix = ret._1
+        clusterdf = ret._2
+
         sparseBlockMatrix.show()
-        if (convergence_count >= 1) {
+        clusterdf.show()
+        if (convergence_count >= convergence_iter) {
           logger.info(s"Stop at iteration ${i}")
           break
-        }
-        if (i > 3) {
-          throw new Exception("ADDF");
         }
       }
     }
 
-    (make_clusters(sparseBlockMatrix).rdd.map(u => (u.getAs("node_id"), u.getAs("new_cid"))), checkpoint)
+    (clusterdf.select("node_id", "cluster_id").rdd.map(u => (u.getInt(0), u.getInt(1))), checkpoint)
   }
 
 
-  def make_clusters(sparseBlockMatrix: SparseBlockMatrix): Dataset[Row] = {
+  def make_clusters(sparseBlockMatrix: SparseBlockMatrix, clusterdf: Dataset[Row]) = {
     val df = sparseBlockMatrix.getMatrix
     import df.sparkSession.implicits._
 
-    val df1 = df.withColumn("s_plus_a", $"responsibility" + $"availability")
 
-
-    val w = Window.partitionBy(col("src"))
-      .orderBy(col("s_plus_a").desc, col("dest"))
-
-    val df2: DataFrame = df1.withColumn("rn", row_number.over(w))
-      .where(col("rn") === 1)
-      .select("src", "dest")
-      .withColumnRenamed("src", "node_id")
-      .withColumnRenamed("dest", "new_cid")
-    df2
+    val df2 = sparseBlockMatrix.argmax_along_row()
+    if (clusterdf == null) {
+      df2.withColumn("old_cluster_id", $"node_id")
+    } else {
+      clusterdf.select($"node_id", $"cluster_id" as "old_cluster_id").join(df2, Seq("node_id"))
+    }
   }
 
-  def run_iteration(sparseBlockMatrix: SparseBlockMatrix, iter: Int) = {
+  def run_iteration(sparseBlockMatrix: SparseBlockMatrix,
+                    clusterdf: DataFrame, iter: Int) = {
+    val df = sparseBlockMatrix.getMatrix
+    import df.sparkSession.implicits._
+
     val matrix2 = sparseBlockMatrix.mmult(sparseBlockMatrix)
-    val matrix3 = matrix2.pow(2).normalize_by_col()
-    matrix3.compact
+    val matrix3 = matrix2.pow(2).normalize_by_col().compact.checkpointWith(checkpoint, rm_prev_ckpt = true)
+    val (_, newclusterdf) = checkpoint.checkpoint(make_clusters(matrix3, clusterdf), rm_prev_ckpt = true, category = "cluster");
+    val cnt = newclusterdf.select(sum(($"old_cluster_id" === $"cluster_id").cast("long"))).head().getLong(0)
+
+    logger.info(s"${cnt} edges changed their clusters at iteration ${iter}")
+    if (cnt > 0) {
+      convergence_count = 0
+    } else {
+      convergence_count += 1
+    }
+    (matrix3, newclusterdf)
   }
 
 }
@@ -90,7 +101,7 @@ object MCL extends LazyLogging {
 
   //return node,cluster pair
   def run(edges: RDD[(Int, Int, Float)], matrix_block_size: Int,
-          sqlContext: SQLContext, max_iteration: Int, inflation: Float,
+          sqlContext: SQLContext, max_iteration: Int, inflation: Float, convergence_iter: Int,
           scaling: Float, checkpoint_dir: String): (RDD[(Int, Int)], Checkpoint) = {
     require(inflation > 0)
     require(matrix_block_size > 0)
@@ -119,7 +130,7 @@ object MCL extends LazyLogging {
 
     val edgeTuples = edges.union(selfEdges)
 
-    mcl.run(edgeTuples, matrix_block_size, sqlContext, max_iteration)
+    mcl.run(edgeTuples, matrix_block_size, sqlContext, max_iteration, convergence_iter = convergence_iter)
   }
 
 }

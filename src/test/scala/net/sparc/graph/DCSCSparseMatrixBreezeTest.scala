@@ -2,7 +2,7 @@ package net.sparc.graph
 
 import java.util
 
-import breeze.linalg.{*, Axis, max, min, sum, DenseMatrix => BDM}
+import breeze.linalg.{*, Axis, argmax, max, min, sum, DenseMatrix => BDM}
 import breeze.numerics.{abs, pow}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers._
@@ -135,7 +135,27 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
       check_array_equal(smat1.pow(r), pow(bmat1, r.toDouble), eps = 1e-3f)
     }
   }
+  test("test argmax along row") {
+    (0 to TEST_ROUND).foreach { _ =>
+      val (bmat1: BDM[Double], smat1: DCSCSparseMatrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(bmat1.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat1.toArray))
+      }
 
+      val d1 = smat1.argmax_along_row()
+      val d2 = argmax(bmat1, Axis._1).toArray
+      d2.indices.foreach {
+        i =>
+          if (d2(i) != 0) {
+            d1.containsKey(i) should be(true)
+            d1.get(i).x should equal(d2(i))
+          }
+      }
+    }
+  }
   test("test normalized by col") {
     (0 to TEST_ROUND).foreach { _ =>
       val (bmat1: BDM[Double], smat1: DCSCSparseMatrix) = createRandMatrix();

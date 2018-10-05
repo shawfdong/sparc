@@ -1,5 +1,6 @@
 package net.sparc.graph
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
@@ -11,24 +12,18 @@ import scala.collection.mutable.ListBuffer
 
 class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n_col_block: Int,
                         val max_row: Int, val max_col: Int, val sparkSession: SparkSession)
-  extends Serializable {
-
-
-  val helper = new DCSCSparseMatrixHelper
-
-  def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
-    val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]
-    val matrix = helper.fromCOOItemArray(bin_row, bin_col, lst.asJava)
-    helper.csc_to_case(matrix)
-
-  }
-
+  extends Serializable with LazyLogging {
 
   import sparkSession.implicits._
+
+  val helper = new DCSCSparseMatrixHelper
 
 
   val bin_row = math.ceil(1.0 * max_row / n_row_block).toInt
   val bin_col = math.ceil(1.0 * max_col / n_col_block).toInt
+
+  logger.info(s"#row_block=${n_row_block}, #col_bock=${n_col_block}, #row=${max_row}, #col=${max_col}, row_bin_size=${bin_row}, col_bin_size=${bin_col}")
+
   require(bin_row > 0)
   require(bin_col > 0)
 
@@ -38,6 +33,12 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
 
   def col_index_to_block(i: Int) = {
     (i / bin_col, i % bin_col)
+  }
+
+  def fromCOO(bin_row: Int, bin_col: Int, tuples: Iterable[(Int, Int, Float)]) = {
+    val lst = tuples.map(u => new COOItem(u._1, u._2, u._3)).to[ListBuffer]
+    val matrix = helper.fromCOOItemArray(bin_row, bin_col, lst.asJava)
+    helper.csc_to_case(matrix)
   }
 
   def getMatrix: Dataset[Row] = matrix
@@ -73,6 +74,38 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     }.foreach(println)
   }
 
+  def get_row_num(block: Int, no: Int) = {
+    bin_row * block + no
+  }
+
+  def get_col_num(block: Int, no: Int) = {
+    bin_col * block + no
+  }
+
+  def argmax_along_row() = {
+
+    val a = matrix.withColumn("aggval", udf_argmax_along_row($"value")).drop("value")
+    //.select($"rowBlock",$"colBlock", map_keys($"aggval"), map_values($"aggval"))
+    a.show()
+    a.printSchema
+    a.rdd.flatMap {
+      case Row(rowBlock: Int, colBlock: Int, dict: Map[Int, Row]) =>
+        dict.map {
+          u =>
+            val row_in_block = u._1
+            val argmax_col_in_block = u._2.getInt(0)
+            val argmax_val_in_block = u._2.getFloat(1)
+            val i = get_row_num(rowBlock, row_in_block)
+            val j = get_col_num(colBlock, argmax_col_in_block)
+            (i, j, argmax_val_in_block)
+        }
+    }.groupBy(_._1).map {
+      u =>
+        val x = u._2.toSeq.sortBy(-_._3).head
+        (x._1, x._2)
+    }.toDF("node_id", "cluster_id")
+  }
+
   def col_sum() = {
     matrix.rdd.map { row =>
       (row: @unchecked) match {
@@ -88,6 +121,10 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val n_row_block: Int, val n
     }.toDF("colBlock", "colsum")
   }
 
+
+  def udf_argmax_along_row = udf((m: Row) => {
+    helper.argmax_along_row(m)
+  })
 
   def udf_pow(r: Double) = udf((m: Row) => {
     helper.pow(m, r)

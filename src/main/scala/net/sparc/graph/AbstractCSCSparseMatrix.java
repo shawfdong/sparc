@@ -85,6 +85,24 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
     }
 
+
+    public HashMap<Integer, ArrayUtils.Tuple<Integer, Float>> argmax_along_row() {
+        HashMap<Integer, ArrayUtils.Tuple<Integer,Float>> dict = new HashMap<>();
+        Iterator<COOItem> itor;
+        for (itor = iterator(); itor.hasNext(); ) {
+            COOItem item = itor.next();
+            if (!dict.containsKey(item.row)) {
+                dict.put(item.row, new ArrayUtils.Tuple<>(item.col,item.v));
+            } else {
+                ArrayUtils.Tuple<Integer, Float> tuple = dict.get(item.row);
+                if (tuple.y<item.v){
+                    dict.put(item.row, new ArrayUtils.Tuple<>(item.col,item.v));
+                }
+            }
+        }
+        return dict;
+    }
+
     public AbstractCSCSparseMatrix transpose() {
 
         ArrayUtils.Triplet<int[], int[], float[]> triplet = this.find();

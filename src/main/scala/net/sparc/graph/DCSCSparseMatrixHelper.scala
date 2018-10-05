@@ -2,7 +2,8 @@ package net.sparc.graph
 
 import java.util
 
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{ColumnName, Row}
+import scala.collection.JavaConverters._
 
 import scala.collection.mutable
 
@@ -26,6 +27,12 @@ class DCSCSparseMatrixHelper extends Serializable {
     }
   }
 
+  def argmax_along_row(m: Row):Map[Integer,(Integer,Float)] ={
+    row_to_csc(m).argmax_along_row.asScala.map{
+      u=>
+        (u._1,(u._2.x,u._2.y.toFloat))
+    }.toMap
+  }
 
   def row_to_csc(row: Row): DCSCSparseMatrix = {
     (row: @unchecked) match {
