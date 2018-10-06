@@ -6,6 +6,7 @@ import breeze.linalg.{*, Axis, argmax, max, min, sum, DenseMatrix => BDM}
 import breeze.numerics.{abs, pow}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers._
+import scala.collection.JavaConverters._
 
 import scala.util.Random
 
@@ -75,6 +76,23 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
       arr1 should equal(arr2);
     }
   }
+
+  test("test to coo") {
+    (0 to TEST_ROUND).foreach { _ =>
+      val (bmat1: BDM[Double], smat1: DCSCSparseMatrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(bmat1.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val arr1 = smat1.toArray
+      val arr2 = DCSCSparseMatrix.fromCOOItemArray(dim._1, dim._2, Random.shuffle(smat1.to_coo.asScala).asJava).toArray
+      arr1 should equal(arr2)
+
+    }
+  }
+
 
   test("test prune") {
     (0 to TEST_ROUND).foreach { _ =>

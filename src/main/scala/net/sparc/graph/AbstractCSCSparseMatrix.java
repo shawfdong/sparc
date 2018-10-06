@@ -67,6 +67,17 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
                 '}';
     }
 
+
+    public List<COOItem> to_coo() {
+        ArrayList<COOItem> lst = new ArrayList<>();
+        Iterator<COOItem> itor;
+        for (itor = iterator(); itor.hasNext(); ) {
+            COOItem item = itor.next();
+            lst.add(item);
+        }
+        return lst;
+    }
+
     protected ArrayUtils.Triplet<int[], int[], float[]> find() {
         int n = nnz();
         int[] row = new int[n];
@@ -87,16 +98,16 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
 
 
     public HashMap<Integer, ArrayUtils.Tuple<Integer, Float>> argmax_along_row() {
-        HashMap<Integer, ArrayUtils.Tuple<Integer,Float>> dict = new HashMap<>();
+        HashMap<Integer, ArrayUtils.Tuple<Integer, Float>> dict = new HashMap<>();
         Iterator<COOItem> itor;
         for (itor = iterator(); itor.hasNext(); ) {
             COOItem item = itor.next();
             if (!dict.containsKey(item.row)) {
-                dict.put(item.row, new ArrayUtils.Tuple<>(item.col,item.v));
+                dict.put(item.row, new ArrayUtils.Tuple<>(item.col, item.v));
             } else {
                 ArrayUtils.Tuple<Integer, Float> tuple = dict.get(item.row);
-                if (tuple.y<item.v){
-                    dict.put(item.row, new ArrayUtils.Tuple<>(item.col,item.v));
+                if (tuple.y < item.v) {
+                    dict.put(item.row, new ArrayUtils.Tuple<>(item.col, item.v));
                 }
             }
         }
@@ -117,7 +128,6 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         S = ArrayUtils.reindex(S, idx);
         return makeSparseMatrix(numCols, numRows, J, sorted_I, S);
     }
-
 
     public AbstractCSCSparseMatrix makeSparseMatrix(int m, int n, int[] row, int[] col, float[] val) {
         ArrayList<COOItem> lst = new ArrayList<COOItem>();
@@ -140,6 +150,30 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         }
         return this;
     }
+
+    public AbstractCSCSparseMatrix abs() {
+        for (int i = 0; i < values.length; i++) {
+            values[i] = Math.abs(values[i]);
+        }
+        return this;
+    }
+
+    public double sum() {
+        double f = 0;
+        for (int i = 0; i < values.length; i++) {
+            f += values[i];
+        }
+        return f;
+    }
+
+    public double sum_abs() {
+        double f = 0;
+        for (int i = 0; i < values.length; i++) {
+            f += Math.abs(values[i]);
+        }
+        return f;
+    }
+
 
     private HashMap<Integer, HashMap<Integer, Float>> to_dict_row_first() {
         HashMap<Integer, HashMap<Integer, Float>> dict = new HashMap<>();

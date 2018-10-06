@@ -7,6 +7,7 @@ import breeze.linalg.{*, Axis, DenseVector, Transpose, argmax, max, min, sum, De
 import breeze.numerics.{abs, pow}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers._
+import scala.collection.JavaConverters._
 
 class CSCSparseMatrixBreezeTest extends FunSuite {
 
@@ -55,6 +56,22 @@ class CSCSparseMatrixBreezeTest extends FunSuite {
 
     arr1.length should equal(arr2.length)
     for (i <- 0 until arr1.size) arr1(i) should be(arr2(i) +- eps)
+  }
+
+  test("test to coo") {
+    (0 to TEST_ROUND).foreach { _ =>
+      val (bmat1: BDM[Double], smat1: CSCSparseMatrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(bmat1.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val arr1 = smat1.toArray
+      val arr2 = CSCSparseMatrix.fromCOOItemArray(dim._1, dim._2, Random.shuffle(smat1.to_coo.asScala).asJava).toArray
+      arr1 should equal(arr2)
+
+    }
   }
 
   test("test prune") {

@@ -5,6 +5,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
+import scala.collection.JavaConverters._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -20,7 +21,7 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
 
 
   val n_row_block = math.ceil(1.0 * num_row / bin_row).toInt
-  val n_col_block = math.ceil(1.0 * num_row / bin_col).toInt
+  val n_col_block = math.ceil(1.0 * num_col / bin_col).toInt
 
   logger.info(s"#row_block=${n_row_block}, #col_bock=${n_col_block}, #row=${num_row}, #col=${num_col}, row_bin_size=${bin_row}, col_bin_size=${bin_col}")
 
@@ -49,7 +50,7 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
       u =>
         val (rowBlock, rowInBlock) = row_index_to_block(u._1)
         val (colBlock, colInBlock) = col_index_to_block(u._2)
-        BlockItem(rowBlock, rowInBlock, colBlock, colInBlock, u._3)
+        BlockItem(rowBlock = rowBlock, rowInBlock = rowInBlock, colBlock = colBlock, colInBlock = colInBlock, value = u._3)
     }.groupBy(u => (u.rowBlock, u.colBlock)).map {
       u =>
 
@@ -122,12 +123,20 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
   }
 
 
-  def udf_argmax_along_row = udf((m: Row) => {
+  val udf_argmax_along_row = udf((m: Row) => {
     helper.argmax_along_row(m)
   })
 
   def udf_pow(r: Double) = udf((m: Row) => {
     helper.pow(m, r)
+  })
+
+  val udf_sum = udf((m: Row) => {
+    helper.row_to_csc(m).sum
+  })
+
+  val udf_sum_abs = udf((m: Row) => {
+    helper.row_to_csc(m).sum_abs
   })
 
   val udf_divide = udf((m1: Row, m2: Row) => {
@@ -166,6 +175,14 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
     this
   }
 
+  def sum(): Double = {
+    matrix.select(org.apache.spark.sql.functions.sum(udf_sum($"value"))).head.getDouble(0)
+  }
+
+  def sum_abs(): Double = {
+    matrix.select(org.apache.spark.sql.functions.sum(udf_sum_abs($"value"))).head.getDouble(0)
+  }
+
   def transpose() = {
     matrix = matrix.withColumn("colBlock", $"rowBlock")
       .withColumn("rowBlock", $"colBlock")
@@ -187,15 +204,50 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
     matrix = df
     this
   }
+
+  def to_local(dim: (Int, Int) = null): AbstractCSCSparseMatrix = {
+    val items = matrix.select($"rowBlock", $"colBlock", $"value").rdd.flatMap {
+      case Row(rowBlock: Int, colBlock: Int, subrow: Row) =>
+        val m = helper.row_to_csc(subrow).to_coo().asScala
+        m.map {
+          v =>
+            val i = get_row_num(rowBlock, v.row)
+            val j = get_col_num(colBlock, v.col)
+            new COOItem(i, j, v.v)
+        }
+    }.collect()
+
+    //require(items.length == items.map(x => (x.col, x.row)).toSet.size)
+    val (m: Int, n: Int) = if (dim == null) {
+      (num_row, num_col)
+    } else {
+      dim
+    }
+    helper.fromCOOItemArray(m, n, items.to[ListBuffer].asJava)
+  }
 }
 
 object SparseBlockMatrix {
+  def from_local(mat: DCSCSparseMatrix, bin_size: Int, spark: SparkSession) = {
+    val dim = (mat.getNumRows, mat.getNumCols)
+
+    val a = mat.to_coo().asScala.map {
+      u =>
+        (u.row, u.col, u.v)
+    }
+    from_rdd(spark.sparkContext.parallelize(a), bin_size, bin_size, dim = null, spark)
+  }
 
 
-  def from_rdd(rdd: RDD[(Int, Int, Float)], bin_row: Int, bin_col: Int, sparkSession: SparkSession): SparseBlockMatrix = {
+  def from_rdd(rdd: RDD[(Int, Int, Float)], bin_row: Int, bin_col: Int, dim: (Int, Int), sparkSession: SparkSession): SparseBlockMatrix = {
     require(bin_row > 0 && bin_col > 0)
-    val max_row = rdd.map(_._1).max()
-    val max_col = rdd.map(_._2).max()
+    val (max_row: Int, max_col: Int) = if (dim == null) {
+      val max1 = rdd.map(_._1).max() + 1
+      val max2 = rdd.map(_._2).max() + 1
+      (max1, max2)
+    } else {
+      dim
+    }
     new SparseBlockMatrix(rdd, bin_row = bin_row, bin_col = bin_col, num_row = max_row, num_col = max_col, sparkSession)
   }
 
