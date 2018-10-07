@@ -27,10 +27,10 @@ class DCSCSparseMatrixHelper extends Serializable {
     }
   }
 
-  def argmax_along_row(m: Row):Map[Integer,(Integer,Float)] ={
-    row_to_csc(m).argmax_along_row.asScala.map{
-      u=>
-        (u._1,(u._2.x,u._2.y.toFloat))
+  def argmax_along_row(m: Row): Map[Integer, (Integer, Float)] = {
+    row_to_csc(m).argmax_along_row.asScala.map {
+      u =>
+        (u._1, (u._2.x, u._2.y.toFloat))
     }.toMap
   }
 
@@ -88,15 +88,33 @@ class DCSCSparseMatrixHelper extends Serializable {
   }
 
   def plus(m1: Row, m2: Row): DCSCMatrixWrapper = {
-    val a = row_to_csc(m1)
-    val b = row_to_csc(m2)
-    csc_to_case(a.plus(b))
+    if (m1 == null && m2 == null)
+      null
+    else if (m1 == null)
+      row_to_wrapper(m2)
+    else if (m2 == null)
+      row_to_wrapper(m1)
+    else {
+      val a = row_to_csc(m1)
+      val b = row_to_csc(m2)
+      csc_to_case(a.plus(b))
+    }
   }
 
   def plus(m1: DCSCMatrixWrapper, m2: DCSCMatrixWrapper): DCSCMatrixWrapper = {
     val a = case_to_csc(m1.asInstanceOf[DCSCMatrixWrapper])
     val b = case_to_csc(m2.asInstanceOf[DCSCMatrixWrapper])
     csc_to_case(a.plus(b))
+  }
+
+  def plus(lst: Iterable[Row]): DCSCMatrixWrapper = {
+    val a = {
+      lst.map(u => row_to_csc(u))
+    }.reduce {
+      (u, v) =>
+        u.plus(v).asInstanceOf[DCSCSparseMatrix]
+    }
+    csc_to_case(a);
   }
 
   def fromCOOItemArray(numRows: Int, numCols: Int, lst: util.List[COOItem]): AbstractCSCSparseMatrix = {

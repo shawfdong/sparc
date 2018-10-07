@@ -129,12 +129,12 @@ public abstract class AbstractCSCSparseMatrix implements Serializable, Iterable 
         return makeSparseMatrix(numCols, numRows, J, sorted_I, S);
     }
 
-    public AbstractCSCSparseMatrix makeSparseMatrix(int m, int n, int[] row, int[] col, float[] val) {
+    public AbstractCSCSparseMatrix makeSparseMatrix(int numRows, int numCols, int[] row, int[] col, float[] val) {
         ArrayList<COOItem> lst = new ArrayList<COOItem>();
         for (int i = 0; i < row.length; i++) {
             lst.add(new COOItem(row[i], col[i], val[i]));
         }
-        return internal_fromCOOItemArray(m, n, lst);
+        return internal_fromCOOItemArray(numRows, numCols, lst);
     }
 
 

@@ -28,7 +28,7 @@ class SparseBlockMatrixSpec extends FlatSpec with Matchers with BeforeAndAfter w
   "Block matrix" should "be convert to local and vice versa" in {
     import spark.implicits._
     (0 to TEST_ROUND).foreach { _ =>
-      val smat1: DCSCSparseMatrix = createRandMatrix();
+      val (smat1, matrix) = createRandMatrix();
       val dim = (smat1.getNumRows, smat1.getNumCols)
 
       if (false) {
@@ -36,7 +36,7 @@ class SparseBlockMatrixSpec extends FlatSpec with Matchers with BeforeAndAfter w
         println(util.Arrays.toString(smat1.toArray))
       }
 
-      val matrix = SparseBlockMatrix.from_local(smat1, bin_size = 20, spark)
+
       matrix.getMatrix.groupBy($"rowBlock", $"colBlock")
         .agg(count($"rowBlock").as("cnt")).select("cnt")
         .head.getLong(0) should be(1)
@@ -72,23 +72,139 @@ class SparseBlockMatrixSpec extends FlatSpec with Matchers with BeforeAndAfter w
 
       val dsum = matrix.sum_abs
 
-      println(smat1.sum_abs, dsum, smat2.sum_abs)
-      dsum should be(smat2.sum_abs)
-      dsum should be(smat1.sum_abs)
+      dsum should be(smat2.sum_abs +- 1e-10)
+      dsum should be(smat1.sum_abs +- 1e-10)
 
       check_array_equal(smat1, smat2)
     }
     //    Thread.sleep(1000 * 10000)
   }
 
+  "Block matrix" should "equal to local for transpose" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
 
-  val TEST_ROUND = 5
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+
+      val matrix2 = matrix.transpose()
+      val smat2 = matrix2.to_local()
+      check_array_equal(smat1.transpose, smat2)
+
+      val matrix3: SparseBlockMatrix = matrix2.transpose()
+      val smat3 = matrix3.to_local()
+      check_array_equal(smat1, smat3)
+
+    }
+  }
+
+  "Block matrix" should "equal to local for pow" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val r = Math.random()
+      val smat2 = matrix.pow(r).to_local()
+      check_array_equal(smat1.pow(r), smat2)
+    }
+  }
+
+  "Block matrix" should "equal to local for plus" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix1) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      val bins = (matrix1.bin_row, matrix1.bin_col)
+      val (smat2, matrix2) = createRandMatrix(dim, bins);
+      if (false) {
+        println(dim, bins)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val eps = 1e-4f
+      val smat4 = smat1.plus(smat2)
+      val matrix3 = matrix1.plus(matrix2)
+      val smat3 = matrix3.to_local()
+      smat3.sum() should be(smat4.sum() +- eps)
+      check_array_equal(smat3, smat4)
+    }
+  }
+
+  "Block matrix" should "equal to local for mmult" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix1) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols, getRandDim())
+      val bins = (matrix1.bin_row, matrix1.bin_col, getRandBin())
+      val (smat2, matrix2) = createRandMatrix((dim._2, dim._3), bins = (bins._2, bins._3));
+      if (false) {
+        println(dim, bins)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+
+      val smat3 = matrix1.mmult(matrix2).to_local()
+
+      check_array_equal(smat3, smat1.mmult(smat2), eps = 1e-2f)
+    }
+  }
+
+  "Block matrix" should "equal to local for normalized by col" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val smat3 = smat1.normalize_by_col()
+      val smat4 = matrix.normalize_by_col().to_local()
+      check_array_equal(smat3, smat4)
+    }
+  }
+
+  "Block matrix" should "equal to local for argmax by row" in {
+    import spark.implicits._
+    (0 to TEST_ROUND).foreach { _ =>
+      val (smat1, matrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(smat1.toArray))
+      }
+      val smat3 = smat1.argmax_along_row().asScala.map {
+        u =>
+          (u._1, u._2.x)
+      }.toMap
+      val smat4 = matrix.argmax_along_row().rdd.map {
+        row =>
+          (row.getInt(0), row.getInt(1))
+      }.collect.toMap
+
+      smat3 should equal(smat4)
+    }
+  }
+
+  val TEST_ROUND = 100
   val N = 100
 
-  def createRandMatrix(mn: (Int, Int) = null) = {
+  def getRandDim() = Random.nextInt(N) + 100
+
+  def getRandBin() = Random.nextInt(10) + 10
+
+  def createRandMatrix(mn: (Int, Int) = null, bins: (Int, Int) = null) = {
     val (m, n) = if (mn == null) {
-      (Random.nextInt(N) + 100
-        , Random.nextInt(N) + 100)
+      (getRandDim(), getRandDim())
     } else {
       mn
     }
@@ -104,7 +220,13 @@ class SparseBlockMatrixSpec extends FlatSpec with Matchers with BeforeAndAfter w
       }
     val arr = bmatrix.toArray.map(_.toFloat);
     val mat = DCSCSparseMatrix.from_array(bmatrix.rows, bmatrix.cols, arr)
-    mat
+
+    val matrix = SparseBlockMatrix.from_local(mat, bin_sizes = {
+      if (bins == null)
+        (getRandBin, getRandBin)
+      else bins
+    }, spark)
+    (mat, matrix)
   }
 
 

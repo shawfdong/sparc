@@ -2,12 +2,12 @@ package net.sparc.graph
 
 import java.util
 
-import breeze.linalg.{*, Axis, argmax, max, min, sum, DenseMatrix => BDM}
+import breeze.linalg.{*, Axis, DenseVector, Transpose, argmax, max, min, sum, DenseMatrix => BDM}
 import breeze.numerics.{abs, pow}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers._
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 class DCSCSparseMatrixBreezeTest extends FunSuite {
@@ -89,7 +89,7 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
       val arr1 = smat1.toArray
       val arr2 = DCSCSparseMatrix.fromCOOItemArray(dim._1, dim._2, Random.shuffle(smat1.to_coo.asScala).asJava).toArray
       arr1 should equal(arr2)
-      arr1.sum should equal (arr2.sum)
+      arr1.sum should equal(arr2.sum)
 
     }
   }
@@ -217,7 +217,10 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
         println(util.Arrays.toString(smat1.toArray))
 
       }
-      check_array_equal(smat1.transpose(), bmat1.t, eps = 1e-6f)
+      val mat3 = smat1.transpose()
+      mat3.getNumRows should be(dim._2)
+      mat3.getNumCols should be(dim._1)
+      check_array_equal(mat3, bmat1.t, eps = 1e-6f)
     }
   }
 
@@ -273,6 +276,23 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
         println(util.Arrays.toString(smat2.toArray))
       }
       check_array_equal(smat1.divide(smat2), bmat1 /:/ bmat2, filter_nan = true, 1e-2f)
+    }
+  }
+
+  test("test divided by row ") {
+    (0 to TEST_ROUND).foreach { _ =>
+      val (bmat1: BDM[Double], smat1: DCSCSparseMatrix) = createRandMatrix();
+      val dim = (smat1.getNumRows, smat1.getNumCols)
+      val (bmat2: BDM[Double], smat2: DCSCSparseMatrix) = createRandMatrix(dim);
+      if (false) {
+        println(dim)
+        println(util.Arrays.toString(bmat1.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat1.toArray))
+        println(util.Arrays.toString(bmat2.toArray.map(_.toFloat)))
+        println(util.Arrays.toString(smat2.toArray))
+      }
+      val a: DenseVector[Double] = sum(bmat2, Axis._0).t
+      check_array_equal(smat1.divide(smat2.sum_by_col()), bmat1(*, ::) /:/ a, filter_nan = true, 1e-2f)
     }
   }
 
