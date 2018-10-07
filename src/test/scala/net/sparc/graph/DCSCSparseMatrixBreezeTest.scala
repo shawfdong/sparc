@@ -89,6 +89,7 @@ class DCSCSparseMatrixBreezeTest extends FunSuite {
       val arr1 = smat1.toArray
       val arr2 = DCSCSparseMatrix.fromCOOItemArray(dim._1, dim._2, Random.shuffle(smat1.to_coo.asScala).asJava).toArray
       arr1 should equal(arr2)
+      arr1.sum should equal (arr2.sum)
 
     }
   }

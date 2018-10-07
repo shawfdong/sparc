@@ -587,10 +587,14 @@ class AbstractCSCSparseMatrixIteartor implements Iterator<COOItem> {
     public COOItem next() {
         if (!hasNext())
             return null;
-
+        while (colPtrs[curr_col + 1] - colPtrs[curr_col] == 0) {
+            curr_col++;
+            curr_k = 0;
+        }
         int pos = colPtrs[curr_col] + curr_k;
         float v = values[pos];
         int row = rowIndices[pos];
+
         COOItem item = new COOItem(row, curr_col, v);
 
         if (colPtrs[curr_col + 1] - colPtrs[curr_col] <= curr_k + 1) {
@@ -600,7 +604,7 @@ class AbstractCSCSparseMatrixIteartor implements Iterator<COOItem> {
             curr_k++;
         }
 
-        ++count;
+        count++;
 
         return item;
     }

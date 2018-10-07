@@ -208,16 +208,17 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
   def to_local(dim: (Int, Int) = null): AbstractCSCSparseMatrix = {
     val items = matrix.select($"rowBlock", $"colBlock", $"value").rdd.flatMap {
       case Row(rowBlock: Int, colBlock: Int, subrow: Row) =>
-        val m = helper.row_to_csc(subrow).to_coo().asScala
-        m.map {
+        val m = helper.row_to_csc(subrow)
+        val lst = m.to_coo().asScala
+        val cooItems = lst.map {
           v =>
             val i = get_row_num(rowBlock, v.row)
             val j = get_col_num(colBlock, v.col)
             new COOItem(i, j, v.v)
         }
+        cooItems
     }.collect()
 
-    //require(items.length == items.map(x => (x.col, x.row)).toSet.size)
     val (m: Int, n: Int) = if (dim == null) {
       (num_row, num_col)
     } else {
@@ -228,14 +229,14 @@ class SparseBlockMatrix(rdd: RDD[(Int, Int, Float)], val bin_row: Int, val bin_c
 }
 
 object SparseBlockMatrix {
-  def from_local(mat: DCSCSparseMatrix, bin_size: Int, spark: SparkSession) = {
+  def from_local(mat: DCSCSparseMatrix, bin_sizes: (Int, Int), spark: SparkSession) = {
     val dim = (mat.getNumRows, mat.getNumCols)
-
+    val (row_bin, col_bin) = bin_sizes
     val a = mat.to_coo().asScala.map {
       u =>
         (u.row, u.col, u.v)
     }
-    from_rdd(spark.sparkContext.parallelize(a), bin_size, bin_size, dim = null, spark)
+    from_rdd(spark.sparkContext.parallelize(a), bin_row = row_bin, bin_col = col_bin, dim = null, spark)
   }
 
 
