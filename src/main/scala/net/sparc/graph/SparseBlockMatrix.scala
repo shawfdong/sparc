@@ -2,12 +2,9 @@ package net.sparc.graph
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.expressions.{UserDefinedAggregateFunction, UserDefinedFunction}
+import org.apache.spark.sql.expressions.{UserDefinedFunction}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{DoubleType, FloatType, StructField, StructType}
-
-import scala.collection.JavaConverters._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
@@ -65,8 +62,6 @@ class SparseBlockMatrix(amatrix: DataFrame, coo_rdd: RDD[(Int, Int, Float)], val
     }
 
     val df = rdd2.toDF("rowBlock", "colBlock", "value")
-    df.printSchema()
-    df.show(3)
     df
   } else {
     amatrix
@@ -102,10 +97,7 @@ class SparseBlockMatrix(amatrix: DataFrame, coo_rdd: RDD[(Int, Int, Float)], val
 
   def argmax_along_row() = {
 
-    val a = matrix.withColumn("aggval", udf_argmax_along_row($"value")).drop("value")
-    //.select($"rowBlock",$"colBlock", map_keys($"aggval"), map_values($"aggval"))
-    a.show()
-    a.printSchema
+    val a = matrix.select($"rowBlock", $"colBlock", udf_argmax_along_row($"value") as "aggval")
     a.rdd.flatMap {
       case Row(rowBlock: Int, colBlock: Int, dict: Map[Int, Row]) =>
         dict.map {
@@ -125,7 +117,7 @@ class SparseBlockMatrix(amatrix: DataFrame, coo_rdd: RDD[(Int, Int, Float)], val
   }
 
   def col_sum() = {
-    matrix.rdd.map { row =>
+    matrix.select("rowBlock", "colBlock", "value").rdd.map { row =>
       (row: @unchecked) match {
         case Row(rowBlock: Int, colBlock: Int,
         subrow: Row)

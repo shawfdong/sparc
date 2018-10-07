@@ -37,7 +37,7 @@ class GraphMCLSpec extends FlatSpec with Matchers with BeforeAndAfter with DataF
   "GraphMCL" should "work with weight" in {
 
     val cfg = GraphMCL.parse_command_line(
-      "-i data/graph_gen_test.txt   -o tmp/graph_mcl_weightedge.txt --max_iteration 10  --min_reads_per_cluster 0 --weight edge  --scaling 0.5 ".split(" ")
+      "-i data/graph_gen_test.txt   -o tmp/graph_mcl_weightedge.txt --max_iteration 10  --min_reads_per_cluster 0 --weight edge  --scaling 0.5  --matrix_block_size 20 --inflation 1.5 ".split(" ")
         .filter(_.nonEmpty)).get
     println(s"called with arguments\n${cfg.valueTreeString}")
 

@@ -6,7 +6,6 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 
 import scala.util.control.Breaks.{break, breakable}
-import scala.collection.JavaConverters._
 
 class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging {
 
@@ -21,7 +20,7 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
 
     require(max_iteration > 0, s"Maximum of steps must be greater than 0, but got ${max_iteration}")
     var sparseBlockMatrix = SparseBlockMatrix.from_rdd(rdd, bin_row = matrix_block_size,
-      bin_col = matrix_block_size, dim=null, spark)
+      bin_col = matrix_block_size, dim = null, spark)
       .normalize_by_col()
       .compact()
       .checkpointWith(checkpoint, rm_prev_ckpt = true)
@@ -39,7 +38,7 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
         clusterdf = ret._2
 
         sparseBlockMatrix.show()
-        clusterdf.show()
+        clusterdf.show(5)
         if (convergence_count >= convergence_iter) {
           logger.info(s"Stop at iteration ${i}")
           break
@@ -55,7 +54,6 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     val df = sparseBlockMatrix.getMatrix
     import df.sparkSession.implicits._
 
-
     val df2 = sparseBlockMatrix.argmax_along_row()
     if (clusterdf == null) {
       df2.withColumn("old_cluster_id", $"node_id")
@@ -70,9 +68,12 @@ class MCL(val checkpoint_dir: String, val inflation: Float) extends LazyLogging 
     import df.sparkSession.implicits._
 
     val matrix2 = sparseBlockMatrix.mmult(sparseBlockMatrix)
-    val matrix3 = matrix2.pow(2).normalize_by_col().compact.checkpointWith(checkpoint, rm_prev_ckpt = true)
-    val (_, newclusterdf) = checkpoint.checkpoint(make_clusters(matrix3, clusterdf), rm_prev_ckpt = true, category = "cluster");
-    val cnt = newclusterdf.select(sum(($"old_cluster_id" === $"cluster_id").cast("long"))).head().getLong(0)
+    val matrix3 = matrix2.pow(this.inflation).normalize_by_col()
+      .compact.checkpointWith(checkpoint, rm_prev_ckpt = true)
+    val (_, newclusterdf) = checkpoint.checkpoint(make_clusters(matrix3, clusterdf),
+      rm_prev_ckpt = true, category = "cluster");
+    val cnt = newclusterdf.select(sum(($"old_cluster_id" === $"cluster_id")
+      .cast("long"))).head().getLong(0)
 
     logger.info(s"${cnt} edges changed their clusters at iteration ${iter}")
     if (cnt > 0) {
