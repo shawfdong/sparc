@@ -1,1 +1,1 @@
-build.sbt.spark2.31.hadoop2.8.4
+build.sbt.spark2.3.4
